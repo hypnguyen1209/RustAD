@@ -1,7 +1,7 @@
-use std::error::Error;
+use crate::kerberos::crypto;
 use hmac::{Hmac, Mac};
 use md5::Md5;
-use crate::kerberos::crypto;
+use std::error::Error;
 
 // md-5 crate re-exports as md5
 type HmacMd5 = Hmac<Md5>;
@@ -67,7 +67,9 @@ pub async fn ask_tgt(params: &AskTgtParams) -> Result<AskTgtResult, Box<dyn Erro
     // KRB-ERROR
     if response[0] == 0x7e {
         let err_code = extract_krb_error_code(&response);
-        let msg = err_code.map(krb_error_to_string).unwrap_or("unknown error".into());
+        let msg = err_code
+            .map(krb_error_to_string)
+            .unwrap_or("unknown error".into());
         return Err(format!("KDC error: {}", msg).into());
     }
 
@@ -85,9 +87,17 @@ pub async fn ask_tgt(params: &AskTgtParams) -> Result<AskTgtResult, Box<dyn Erro
         decrypt_enc_part(&enc_part, &user_key, etype)?
     };
 
-    let session_key_etype = if session_key.len() == 32 { 18 }
-        else if session_key.len() == 16 { if etype == 23 { 23 } else { 17 } }
-        else { etype };
+    let session_key_etype = if session_key.len() == 32 {
+        18
+    } else if session_key.len() == 16 {
+        if etype == 23 {
+            23
+        } else {
+            17
+        }
+    } else {
+        etype
+    };
 
     Ok(AskTgtResult {
         raw_reply: response,
@@ -115,7 +125,11 @@ fn effective_etype(key: &KeyMaterial, preferred: i32) -> i32 {
         KeyMaterial::Aes128Key(_) => crypto::ETYPE_AES128_CTS_HMAC_SHA1,
         KeyMaterial::Rc4Key(_) => crypto::ETYPE_RC4_HMAC,
         KeyMaterial::Password(_) => {
-            if preferred != 0 { preferred } else { crypto::ETYPE_RC4_HMAC }
+            if preferred != 0 {
+                preferred
+            } else {
+                crypto::ETYPE_RC4_HMAC
+            }
         }
     }
 }
@@ -176,14 +190,10 @@ fn build_as_req_with_preauth(
 
     // PA-PAC-REQUEST: padata-type = 128
     let pac_req = if pac_request {
-        let pac_val = encode_sequence_raw(&[
-            &encode_context_tag(0, &encode_boolean(true))
-        ]);
+        let pac_val = encode_sequence_raw(&[&encode_context_tag(0, &encode_boolean(true))]);
         build_padata(128, &pac_val)
     } else {
-        let pac_val = encode_sequence_raw(&[
-            &encode_context_tag(0, &encode_boolean(false))
-        ]);
+        let pac_val = encode_sequence_raw(&[&encode_context_tag(0, &encode_boolean(false))]);
         build_padata(128, &pac_val)
     };
 
@@ -219,7 +229,10 @@ fn encrypt_timestamp(key: &[u8], etype: i32) -> Result<Vec<u8>, Box<dyn Error>> 
     // PA-ENC-TS-ENC ::= SEQUENCE { patimestamp[0] KerberosTime, pausec[1] INTEGER OPTIONAL }
     let mut ts_body = Vec::new();
     ts_body.extend(encode_context_tag(0, &encode_generalized_time(&ts_str)));
-    ts_body.extend(encode_context_tag(1, &encode_integer(now.timestamp_subsec_micros() as i32)));
+    ts_body.extend(encode_context_tag(
+        1,
+        &encode_integer(now.timestamp_subsec_micros() as i32),
+    ));
     let plaintext = encode_sequence_raw(&[&ts_body]);
 
     match etype {
@@ -275,16 +288,22 @@ fn rc4_transform(key: &[u8], data: &[u8]) -> Vec<u8> {
 
     let mut i: u8 = 0;
     let mut j: u8 = 0;
-    data.iter().map(|&byte| {
-        i = i.wrapping_add(1);
-        j = j.wrapping_add(s[i as usize]);
-        s.swap(i as usize, j as usize);
-        let k = s[s[i as usize].wrapping_add(s[j as usize]) as usize];
-        byte ^ k
-    }).collect()
+    data.iter()
+        .map(|&byte| {
+            i = i.wrapping_add(1);
+            j = j.wrapping_add(s[i as usize]);
+            s.swap(i as usize, j as usize);
+            let k = s[s[i as usize].wrapping_add(s[j as usize]) as usize];
+            byte ^ k
+        })
+        .collect()
 }
 
-fn decrypt_enc_part(enc_part_cipher: &[u8], key: &[u8], etype: i32) -> Result<Vec<u8>, Box<dyn Error>> {
+fn decrypt_enc_part(
+    enc_part_cipher: &[u8],
+    key: &[u8],
+    etype: i32,
+) -> Result<Vec<u8>, Box<dyn Error>> {
     match etype {
         23 => {
             // RC4-HMAC decrypt (key usage 3 for AS-REP enc-part, or 8 for TGS-REP)
@@ -365,7 +384,7 @@ fn extract_session_key_from_enc_rep(data: &[u8]) -> Result<Vec<u8>, Box<dyn Erro
                         pos += 1;
                         let oct_len = parse_length(data, &mut pos).map_err(|_| "bad octet len")?;
                         if pos + oct_len <= data.len() {
-                            return Ok(data[pos..pos+oct_len].to_vec());
+                            return Ok(data[pos..pos + oct_len].to_vec());
                         }
                     }
                     break;
@@ -384,7 +403,9 @@ fn extract_session_key_from_enc_rep(data: &[u8]) -> Result<Vec<u8>, Box<dyn Erro
         let tag = data[pos];
         pos += 1;
         if let Ok(len) = parse_length(data, &mut pos) {
-            if tag & 0x20 == 0 { pos += len; } // skip primitive, recurse constructed
+            if tag & 0x20 == 0 {
+                pos += len;
+            } // skip primitive, recurse constructed
         } else {
             break;
         }
@@ -405,7 +426,7 @@ fn extract_ticket_from_asrep(data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let len = parse_length(inner, &mut pos).map_err(|_| "parse error in AS-REP")?;
         if tag == 0xa5 {
             // context tag [5] = ticket
-            return Ok(inner[pos..pos+len].to_vec());
+            return Ok(inner[pos..pos + len].to_vec());
         }
         pos += len;
     }
@@ -423,7 +444,7 @@ fn extract_enc_part_from_asrep(data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let len = parse_length(inner, &mut pos).map_err(|_| "parse error")?;
         if tag == 0xa6 {
             // context tag [6] = enc-part
-            let enc_data = &inner[pos..pos+len];
+            let enc_data = &inner[pos..pos + len];
             // Find cipher OCTET STRING in EncryptedData
             return extract_cipher_from_encrypted_data(enc_data);
         }
@@ -449,7 +470,7 @@ fn extract_cipher_from_encrypted_data(data: &[u8]) -> Result<Vec<u8>, Box<dyn Er
             if pos < data.len() && data[pos] == 0x04 {
                 pos += 1;
                 let oct_len = parse_length(data, &mut pos).map_err(|_| "octet string len")?;
-                return Ok(data[pos..pos+oct_len].to_vec());
+                return Ok(data[pos..pos + oct_len].to_vec());
             }
         }
         pos += len;
@@ -458,58 +479,94 @@ fn extract_cipher_from_encrypted_data(data: &[u8]) -> Result<Vec<u8>, Box<dyn Er
 }
 
 fn unwrap_application(data: &[u8]) -> Result<&[u8], Box<dyn Error>> {
-    if data.is_empty() { return Err("empty data".into()); }
+    if data.is_empty() {
+        return Err("empty data".into());
+    }
     let mut pos = 1; // skip APPLICATION tag byte
     let len = parse_length(data, &mut pos).map_err(|_| "bad APPLICATION length")?;
-    if pos + len > data.len() { return Err("APPLICATION length overflow".into()); }
-    let inner = &data[pos..pos+len];
+    if pos + len > data.len() {
+        return Err("APPLICATION length overflow".into());
+    }
+    let inner = &data[pos..pos + len];
     // inner should be a SEQUENCE
-    if inner.is_empty() || inner[0] != 0x30 { return Err("expected SEQUENCE inside APPLICATION".into()); }
+    if inner.is_empty() || inner[0] != 0x30 {
+        return Err("expected SEQUENCE inside APPLICATION".into());
+    }
     let mut seq_pos = 1;
     let seq_len = parse_length(inner, &mut seq_pos).map_err(|_| "bad SEQUENCE length")?;
-    Ok(&inner[seq_pos..seq_pos+seq_len])
+    Ok(&inner[seq_pos..seq_pos + seq_len])
 }
 
 // ──────── ASN.1 helpers ────────
 
 fn parse_length(data: &[u8], pos: &mut usize) -> Result<usize, ()> {
-    if *pos >= data.len() { return Err(()); }
-    let first = data[*pos]; *pos += 1;
-    if first < 0x80 { return Ok(first as usize); }
+    if *pos >= data.len() {
+        return Err(());
+    }
+    let first = data[*pos];
+    *pos += 1;
+    if first < 0x80 {
+        return Ok(first as usize);
+    }
     let n = (first & 0x7f) as usize;
-    if n > 4 || *pos + n > data.len() { return Err(()); }
+    if n > 4 || *pos + n > data.len() {
+        return Err(());
+    }
     let mut len = 0usize;
-    for _ in 0..n { len = (len << 8) | data[*pos] as usize; *pos += 1; }
+    for _ in 0..n {
+        len = (len << 8) | data[*pos] as usize;
+        *pos += 1;
+    }
     Ok(len)
 }
 
 fn encode_length(len: usize) -> Vec<u8> {
-    if len < 0x80 { vec![len as u8] }
-    else if len < 0x100 { vec![0x81, len as u8] }
-    else { vec![0x82, (len >> 8) as u8, len as u8] }
+    if len < 0x80 {
+        vec![len as u8]
+    } else if len < 0x100 {
+        vec![0x81, len as u8]
+    } else {
+        vec![0x82, (len >> 8) as u8, len as u8]
+    }
 }
 fn encode_sequence_raw(items: &[&[u8]]) -> Vec<u8> {
     let mut c = Vec::new();
-    for i in items { c.extend_from_slice(i); }
-    let mut o = vec![0x30]; o.extend(encode_length(c.len())); o.extend(c); o
+    for i in items {
+        c.extend_from_slice(i);
+    }
+    let mut o = vec![0x30];
+    o.extend(encode_length(c.len()));
+    o.extend(c);
+    o
 }
 fn encode_context_tag(tag: u8, content: &[u8]) -> Vec<u8> {
-    let mut o = vec![0xa0 | tag]; o.extend(encode_length(content.len())); o.extend(content); o
+    let mut o = vec![0xa0 | tag];
+    o.extend(encode_length(content.len()));
+    o.extend(content);
+    o
 }
 fn encode_application_tag(tag: u8, content: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x60 | tag]; o.extend(encode_length(content.len())); o.extend(content); o
+    let mut o = vec![0x60 | tag];
+    o.extend(encode_length(content.len()));
+    o.extend(content);
+    o
 }
 fn encode_integer(val: i32) -> Vec<u8> {
     let mut o = vec![0x02];
-    if val >= 0 && val < 128 { o.extend(encode_length(1)); o.push(val as u8); }
-    else {
+    if val >= 0 && val < 128 {
+        o.extend(encode_length(1));
+        o.push(val as u8);
+    } else {
         let b = val.to_be_bytes();
         let s = b.iter().position(|&x| x != 0).unwrap_or(3);
         let slice = &b[s..];
         if !slice.is_empty() && slice[0] & 0x80 != 0 && val >= 0 {
-            o.extend(encode_length(slice.len() + 1)); o.push(0); o.extend(slice);
+            o.extend(encode_length(slice.len() + 1));
+            o.push(0);
+            o.extend(slice);
         } else {
-            o.extend(encode_length(slice.len())); o.extend(slice);
+            o.extend(encode_length(slice.len()));
+            o.extend(slice);
         }
     }
     o
@@ -520,21 +577,39 @@ fn encode_integer_u32(val: u32) -> Vec<u8> {
     let s = b.iter().position(|&x| x != 0).unwrap_or(3);
     let t = &b[s..];
     if t.is_empty() || t[0] & 0x80 != 0 {
-        o.extend(encode_length(t.len() + 1)); o.push(0); o.extend(t);
-    } else { o.extend(encode_length(t.len())); o.extend(t); }
+        o.extend(encode_length(t.len() + 1));
+        o.push(0);
+        o.extend(t);
+    } else {
+        o.extend(encode_length(t.len()));
+        o.extend(t);
+    }
     o
 }
 fn encode_general_string(s: &str) -> Vec<u8> {
-    let mut o = vec![0x1b]; o.extend(encode_length(s.len())); o.extend(s.as_bytes()); o
+    let mut o = vec![0x1b];
+    o.extend(encode_length(s.len()));
+    o.extend(s.as_bytes());
+    o
 }
 fn encode_generalized_time(t: &str) -> Vec<u8> {
-    let mut o = vec![0x18]; o.extend(encode_length(t.len())); o.extend(t.as_bytes()); o
+    let mut o = vec![0x18];
+    o.extend(encode_length(t.len()));
+    o.extend(t.as_bytes());
+    o
 }
 fn encode_bitstring(data: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x03]; o.extend(encode_length(data.len() + 1)); o.push(0); o.extend(data); o
+    let mut o = vec![0x03];
+    o.extend(encode_length(data.len() + 1));
+    o.push(0);
+    o.extend(data);
+    o
 }
 fn encode_octet_string(data: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x04]; o.extend(encode_length(data.len())); o.extend(data); o
+    let mut o = vec![0x04];
+    o.extend(encode_length(data.len()));
+    o.extend(data);
+    o
 }
 fn encode_boolean(val: bool) -> Vec<u8> {
     vec![0x01, 0x01, if val { 0xff } else { 0x00 }]
@@ -542,7 +617,9 @@ fn encode_boolean(val: bool) -> Vec<u8> {
 fn encode_principal_name(name_type: i32, names: &[&str]) -> Vec<u8> {
     let nt = encode_integer(name_type);
     let mut ns = Vec::new();
-    for n in names { ns.extend(encode_general_string(n)); }
+    for n in names {
+        ns.extend(encode_general_string(n));
+    }
     let nseq = encode_sequence_raw(&[&ns]);
     let mut c = Vec::new();
     c.extend(encode_context_tag(0, &nt));
@@ -560,8 +637,16 @@ fn base64_encode(data: &[u8]) -> String {
         let triple = (b0 << 16) | (b1 << 8) | b2;
         result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
         result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
-        result.push(if chunk.len() > 1 { CHARS[((triple >> 6) & 0x3F) as usize] as char } else { '=' });
-        result.push(if chunk.len() > 2 { CHARS[(triple & 0x3F) as usize] as char } else { '=' });
+        result.push(if chunk.len() > 1 {
+            CHARS[((triple >> 6) & 0x3F) as usize] as char
+        } else {
+            '='
+        });
+        result.push(if chunk.len() > 2 {
+            CHARS[(triple & 0x3F) as usize] as char
+        } else {
+            '='
+        });
     }
     result
 }
@@ -605,7 +690,11 @@ fn krb_error_to_string(code: u32) -> String {
 pub fn print_result(result: &AskTgtResult) {
     println!("\n  User         : {}@{}", result.username, result.domain);
     println!("  Etype        : {}", result.etype);
-    println!("  Session Key  : {} (etype {})", hex_encode(&result.session_key), result.session_key_etype);
+    println!(
+        "  Session Key  : {} (etype {})",
+        hex_encode(&result.session_key),
+        result.session_key_etype
+    );
     println!("  Ticket Size  : {} bytes", result.ticket.len());
     println!("  Reply Size   : {} bytes", result.raw_reply.len());
     let b64 = result.to_base64();

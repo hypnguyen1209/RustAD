@@ -17,13 +17,17 @@ pub struct Esc8Data {
 
 impl Default for Esc8Data {
     fn default() -> Self {
-        Self { http_enrollment_endpoints: vec![] }
+        Self {
+            http_enrollment_endpoints: vec![],
+        }
     }
 }
 
 impl From<Esc8Result> for Esc8Data {
     fn from(r: Esc8Result) -> Self {
-        Self { http_enrollment_endpoints: r.endpoints }
+        Self {
+            http_enrollment_endpoints: r.endpoints,
+        }
     }
 }
 
@@ -38,6 +42,6 @@ pub fn probe_enterpriseca_esc8(dns_host: &str) -> Esc8Data {
     }
     match check_esc8(dns_host) {
         Some(result) => Esc8Data::from(result),
-        None         => Esc8Data::default(),
+        None => Esc8Data::default(),
     }
 }

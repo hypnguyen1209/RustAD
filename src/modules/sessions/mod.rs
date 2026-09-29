@@ -36,40 +36,43 @@ use tokio::net::TcpStream;
 use tokio::sync::Semaphore;
 use tokio::time::{timeout, Duration};
 
+use crate::transport::smb::{connect_ipc, open_rpc_pipe, smb_user, SmbAuth};
 use dcerpc::rrp::{RegistryClient, RegistrySession};
 use dcerpc::srvsvc::SrvsvcClient;
 use dcerpc::wkssvc::{WkstaUser, WkstaUserClient};
 use smb2_client::SmbClient;
-use crate::transport::smb::{connect_ipc, open_rpc_pipe, smb_user, SmbAuth};
 
 use crate::args::{CollectionMethod, Options};
 use crate::objects::common::UserComputerSession;
 use crate::objects::computer::Computer;
 use crate::objects::user::User;
 
-const DEFAULT_CONCURRENCY: usize = 10;      // ~ SharpHound --Throttle
+const DEFAULT_CONCURRENCY: usize = 10; // ~ SharpHound --Throttle
 const DEFAULT_PORT_TIMEOUT_MS: u64 = 1_500; // 445 pre-check budget
 const DEFAULT_HOST_TIMEOUT_MS: u64 = 8_000; // whole per-host RPC budget
-const DEFAULT_EXPIRY_DAYS: i64 = 60;        // ~ SharpHound --ComputerExpiryDays
+const DEFAULT_EXPIRY_DAYS: i64 = 60; // ~ SharpHound --ComputerExpiryDays
 
 // ----
 // Raw per-host findings (kept close to HasSession-rs)
 // ----
 
-struct SmbSession { user: String, _client: String }
+struct SmbSession {
+    user: String,
+    _client: String,
+}
 
 struct HostFindings {
     computer_sid: String,
-    smb_sessions: Vec<SmbSession>,      // SRVSVC
-    logged_on:    Vec<WkstaUser>,       // WKSSVC
-    registry:     Vec<RegistrySession>, // WINREG
-    errors:       Vec<String>,
+    smb_sessions: Vec<SmbSession>,  // SRVSVC
+    logged_on: Vec<WkstaUser>,      // WKSSVC
+    registry: Vec<RegistrySession>, // WINREG
+    errors: Vec<String>,
 }
 
 // Entry point called by run_modules
 pub async fn run(
-    args:      &Options,
-    users:     &[User],           // needed to resolve RPC principal names -> SIDs
+    args: &Options,
+    users: &[User], // needed to resolve RPC principal names -> SIDs
     computers: &mut Vec<Computer>,
 ) -> Result<(), Box<dyn Error>> {
     // Hard guard: DCOnly must never touch a machine.
@@ -90,7 +93,10 @@ pub async fn run(
         .map(|c| (c.properties().name().clone(), c.object_identifier().clone()))
         .collect();
 
-    info!("[sessions] {} active target(s) after expiry/enabled filter", targets.len());
+    info!(
+        "[sessions] {} active target(s) after expiry/enabled filter",
+        targets.len()
+    );
 
     // 3) Enumerate with bounded concurrency (throttle) instead of a serial loop.
     let sem = Arc::new(Semaphore::new(DEFAULT_CONCURRENCY));
@@ -116,17 +122,30 @@ pub async fn run(
 
     let findings: Vec<HostFindings> = stream::iter(targets)
         .map(|(host, computer_sid)| {
-            let (sem, domain, user, password, method) =
-                (sem.clone(), domain.clone(), user.clone(), password.clone(), method.clone());
+            let (sem, domain, user, password, method) = (
+                sem.clone(),
+                domain.clone(),
+                user.clone(),
+                password.clone(),
+                method.clone(),
+            );
             let nt_hash = nt_hash;
             let kerberos_ccache = kerberos_ccache.clone();
             let kdc = kdc.clone();
             async move {
                 let _permit = sem.acquire().await.unwrap();
                 enumerate_host(
-                    &host, computer_sid, &domain, &user, &password,
-                    nt_hash.as_ref(), kerberos_ccache.as_deref(), &kdc, &method,
-                ).await
+                    &host,
+                    computer_sid,
+                    &domain,
+                    &user,
+                    &password,
+                    nt_hash.as_ref(),
+                    kerberos_ccache.as_deref(),
+                    &kdc,
+                    &method,
+                )
+                .await
             }
         })
         .buffer_unordered(DEFAULT_CONCURRENCY)
@@ -137,10 +156,14 @@ pub async fn run(
     let mut total_sessions = 0usize;
     for hf in &findings {
         total_sessions += apply_findings(computers, hf, &sid_index, &args.domain);
-        for e in &hf.errors { warn!("{e}"); }
+        for e in &hf.errors {
+            warn!("{e}");
+        }
     }
-    info!("[sessions] {total_sessions} session(s) enumerated in total across {} host(s)",
-          findings.len());
+    info!(
+        "[sessions] {total_sessions} session(s) enumerated in total across {} host(s)",
+        findings.len()
+    );
 
     Ok(())
 }
@@ -148,8 +171,11 @@ pub async fn run(
 // Per-host enumeration (adapted from HasSession-rs enumerate_host)
 #[allow(clippy::too_many_arguments)]
 async fn enumerate_host(
-    host: &str, computer_sid: String,
-    domain: &str, user: &str, password: &str,
+    host: &str,
+    computer_sid: String,
+    domain: &str,
+    user: &str,
+    password: &str,
     nt_hash: Option<&[u8; 16]>,
     kerberos_ccache: Option<&str>,
     kdc: &str,
@@ -160,7 +186,9 @@ async fn enumerate_host(
         trace!("[{host}] 445/tcp unreachable - skip");
         return HostFindings {
             computer_sid,
-            smb_sessions: Vec::new(), logged_on: Vec::new(), registry: Vec::new(),
+            smb_sessions: Vec::new(),
+            logged_on: Vec::new(),
+            registry: Vec::new(),
             errors: vec![format!("{host}: 445/tcp unreachable")],
         };
     }
@@ -169,9 +197,9 @@ async fn enumerate_host(
     // aliases the outer findings the timeout wrapper also needs (avoids E0499).
     let work = async {
         let mut smb_sessions = Vec::new();
-        let mut logged_on    = Vec::new();
-        let mut registry     = Vec::new();
-        let mut errors       = Vec::new();
+        let mut logged_on = Vec::new();
+        let mut registry = Vec::new();
+        let mut errors = Vec::new();
 
         // Inner block uses `?` for the fatal connect/auth/tree steps; the error
         // is folded into `errors` instead of bubbling out of `work`.
@@ -184,51 +212,71 @@ async fn enumerate_host(
                     crate::transport::kerberos::kerberos_material_for(ccache, &spn, kdc)
                         .await
                         .map_err(|e| format!("{host} krb: {e}"))?;
-                let auth = SmbAuth::Kerberos { gss_blob: &gss_blob, session_key: &session_key };
-                connect_ipc(host, domain, user, auth).await.map_err(|e| format!("{host}: {e}"))?
+                let auth = SmbAuth::Kerberos {
+                    gss_blob: &gss_blob,
+                    session_key: &session_key,
+                };
+                connect_ipc(host, domain, user, auth)
+                    .await
+                    .map_err(|e| format!("{host}: {e}"))?
             } else {
                 let auth = match nt_hash {
                     Some(h) => SmbAuth::Hash(h),
-                    None    => SmbAuth::Password(password),
+                    None => SmbAuth::Password(password),
                 };
-                connect_ipc(host, domain, user, auth).await.map_err(|e| format!("{host}: {e}"))?
+                connect_ipc(host, domain, user, auth)
+                    .await
+                    .map_err(|e| format!("{host}: {e}"))?
             };
 
             if method.srvsvc() {
                 match srvsvc_sessions(&mut smb, host).await {
-                    Ok((_, 5)) => errors.push(format!("[{host}] SRVSVC rc=5 ACCESS_DENIED (hardened / non-admin)")),
+                    Ok((_, 5)) => errors.push(format!(
+                        "[{host}] SRVSVC rc=5 ACCESS_DENIED (hardened / non-admin)"
+                    )),
                     Ok((s, _)) => smb_sessions = s,
-                    Err(e)     => errors.push(format!("{host} SRVSVC: {e}")),
+                    Err(e) => errors.push(format!("{host} SRVSVC: {e}")),
                 }
             }
             if method.wkssvc() {
                 match enum_wksta(&mut smb, host).await {
-                    Ok((_, 5)) => errors.push(format!("[{host}] WKSSVC rc=5 (local admin required)")),
+                    Ok((_, 5)) => {
+                        errors.push(format!("[{host}] WKSSVC rc=5 (local admin required)"))
+                    }
                     Ok((u, _)) => logged_on = dedup_wksta(u),
-                    Err(e)     => errors.push(format!("{host} WKSSVC: {e}")),
+                    Err(e) => errors.push(format!("{host} WKSSVC: {e}")),
                 }
             }
             if method.registry() {
                 match enum_registry(&mut smb, domain, user, password, nt_hash, host).await {
                     Ok(sids) => registry = sids,
-                    Err(e)   => errors.push(format!("{host} WINREG: {e} (RemoteRegistry stopped?)")),
+                    Err(e) => errors.push(format!("{host} WINREG: {e} (RemoteRegistry stopped?)")),
                 }
             }
             Ok(())
-        }.await;
+        }
+        .await;
 
-        if let Err(e) = fatal { errors.push(e); }
+        if let Err(e) = fatal {
+            errors.push(e);
+        }
         (smb_sessions, logged_on, registry, errors)
     };
 
     // whole-host budget so a slow-but-open host can't stall a worker
     match timeout(Duration::from_millis(DEFAULT_HOST_TIMEOUT_MS), work).await {
         Ok((smb_sessions, logged_on, registry, errors)) => HostFindings {
-            computer_sid, smb_sessions, logged_on, registry, errors,
+            computer_sid,
+            smb_sessions,
+            logged_on,
+            registry,
+            errors,
         },
         Err(_elapsed) => HostFindings {
             computer_sid,
-            smb_sessions: Vec::new(), logged_on: Vec::new(), registry: Vec::new(),
+            smb_sessions: Vec::new(),
+            logged_on: Vec::new(),
+            registry: Vec::new(),
             errors: vec![format!("{host}: per-host timeout")],
         },
     }
@@ -237,28 +285,46 @@ async fn enumerate_host(
 // Reachability + activity helpers
 async fn is_reachable(host: &str, port_timeout_ms: u64) -> bool {
     matches!(
-        timeout(Duration::from_millis(port_timeout_ms),
-                TcpStream::connect(format!("{host}:445"))).await,
+        timeout(
+            Duration::from_millis(port_timeout_ms),
+            TcpStream::connect(format!("{host}:445"))
+        )
+        .await,
         Ok(Ok(_))
     )
 }
 
 /// enabled + pwdLastSet within the expiry window (~ SharpHound ComputerExpiryDays).
 fn is_active(c: &Computer, expiry_days: i64) -> bool {
-    if !*c.properties().enabled() { return false; }
+    if !*c.properties().enabled() {
+        return false;
+    }
     let pls = c.properties().pwdlastset();
-    if pls <= 0 { return false; }
+    if pls <= 0 {
+        return false;
+    }
     let now = chrono::Utc::now().timestamp();
     now - pls < expiry_days * 86_400
 }
 
 // Isolated RPC calls (unchanged from HasSession-rs)
-async fn srvsvc_sessions(smb: &mut SmbClient, host: &str) -> anyhow::Result<(Vec<SmbSession>, u32)> {
+async fn srvsvc_sessions(
+    smb: &mut SmbClient,
+    host: &str,
+) -> anyhow::Result<(Vec<SmbSession>, u32)> {
     let pipe = open_rpc_pipe(smb, host, "srvsvc").await?;
     let mut srv = SrvsvcClient::bind(smb, pipe).await?;
     let (sessions, rc) = srv.enum_sessions().await?;
-    Ok((sessions.into_iter()
-        .map(|s| SmbSession { user: s.user, _client: s.client }).collect(), rc))
+    Ok((
+        sessions
+            .into_iter()
+            .map(|s| SmbSession {
+                user: s.user,
+                _client: s.client,
+            })
+            .collect(),
+        rc,
+    ))
 }
 
 async fn enum_wksta(smb: &mut SmbClient, host: &str) -> anyhow::Result<(Vec<WkstaUser>, u32)> {
@@ -267,17 +333,25 @@ async fn enum_wksta(smb: &mut SmbClient, host: &str) -> anyhow::Result<(Vec<Wkst
     Ok(wk.enum_users().await?)
 }
 
-async fn enum_registry(smb: &mut SmbClient, domain: &str, user: &str,
-                       password: &str, nt_hash: Option<&[u8; 16]>, host: &str)
-    -> anyhow::Result<Vec<RegistrySession>>
-{
+async fn enum_registry(
+    smb: &mut SmbClient,
+    domain: &str,
+    user: &str,
+    password: &str,
+    nt_hash: Option<&[u8; 16]>,
+    host: &str,
+) -> anyhow::Result<Vec<RegistrySession>> {
     let mut reg = match nt_hash {
-        Some(h) => RegistryClient::connect_hash(smb, domain, user, h, host).await
-                       .map_err(|e| anyhow::anyhow!("{e}"))?,
-        None    => RegistryClient::connect(smb, domain, user, password, host).await
-                       .map_err(|e| anyhow::anyhow!("{e}"))?,
+        Some(h) => RegistryClient::connect_hash(smb, domain, user, h, host)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?,
+        None => RegistryClient::connect(smb, domain, user, password, host)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?,
     };
-    reg.logged_on_sids().await.map_err(|e| anyhow::anyhow!("{e}"))
+    reg.logged_on_sids()
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 /// Build the principal -> SID lookup from the users collected during LDAP.
@@ -290,7 +364,9 @@ fn build_sid_index(users: &[User]) -> HashMap<String, String> {
     let mut idx = HashMap::with_capacity(users.len() * 2);
     for u in users {
         let sid = u.object_identifier().clone();
-        if sid.is_empty() { continue; }
+        if sid.is_empty() {
+            continue;
+        }
         let upn = u.properties().name().to_uppercase(); // SAM@DOMAIN.FQDN
         if let Some(sam) = upn.split('@').next() {
             idx.entry(sam.to_string()).or_insert_with(|| sid.clone());
@@ -326,7 +402,8 @@ fn mk_link(user_sid: String, computer_sid: String) -> UserComputerSession {
 fn dedup_wksta(users: Vec<WkstaUser>) -> Vec<WkstaUser> {
     use std::collections::BTreeSet;
     let mut seen = BTreeSet::new();
-    users.into_iter()
+    users
+        .into_iter()
         .filter(|u| !u.username.ends_with('$'))
         .filter(|u| seen.insert((u.logon_domain.clone(), u.username.clone())))
         .collect()
@@ -383,12 +460,18 @@ fn apply_findings(
         for u in &hf.logged_on {
             match resolve(&u.username, sid_index, domain) {
                 Some(user_sid) => {
-                    trace!("[WKSSVC] {}\\{} has session on {fqdn}", u.logon_domain, u.username);
+                    trace!(
+                        "[WKSSVC] {}\\{} has session on {fqdn}",
+                        u.logon_domain,
+                        u.username
+                    );
                     p.results_mut().push(mk_link(user_sid, comp_sid.clone()));
                     count += 1;
                 }
-                None => warn!("[{comp_sid}] unresolved WKSSVC principal '{}\\{}'",
-                               u.logon_domain, u.username),
+                None => warn!(
+                    "[{comp_sid}] unresolved WKSSVC principal '{}\\{}'",
+                    u.logon_domain, u.username
+                ),
             }
         }
         *p.collected_mut() = true;
@@ -398,9 +481,12 @@ fn apply_findings(
     {
         let r = computer.registry_sessions_mut();
         for reg in &hf.registry {
-            if reg.sid.is_empty() { continue; }
+            if reg.sid.is_empty() {
+                continue;
+            }
             trace!("[WINREG] {} has session on {fqdn}", reg.sid);
-            r.results_mut().push(mk_link(reg.sid.clone(), comp_sid.clone()));
+            r.results_mut()
+                .push(mk_link(reg.sid.clone(), comp_sid.clone()));
             count += 1;
         }
         *r.collected_mut() = true;

@@ -1,5 +1,5 @@
-use sha1::Sha1;
 use sha1::Digest as Sha1Digest;
+use sha1::Sha1;
 
 pub const ETYPE_DES_CBC_MD5: i32 = 3;
 pub const ETYPE_RC4_HMAC: i32 = 23;
@@ -7,7 +7,8 @@ pub const ETYPE_AES128_CTS_HMAC_SHA1: i32 = 17;
 pub const ETYPE_AES256_CTS_HMAC_SHA1: i32 = 18;
 
 pub fn nt_hash(password: &str) -> Vec<u8> {
-    let utf16: Vec<u8> = password.encode_utf16()
+    let utf16: Vec<u8> = password
+        .encode_utf16()
         .flat_map(|c| c.to_le_bytes())
         .collect();
     md4_hash(&utf16)
@@ -16,9 +17,15 @@ pub fn nt_hash(password: &str) -> Vec<u8> {
 fn md4_hash(data: &[u8]) -> Vec<u8> {
     use std::num::Wrapping;
 
-    fn f(x: u32, y: u32, z: u32) -> u32 { (x & y) | (!x & z) }
-    fn g(x: u32, y: u32, z: u32) -> u32 { (x & y) | (x & z) | (y & z) }
-    fn h(x: u32, y: u32, z: u32) -> u32 { x ^ y ^ z }
+    fn f(x: u32, y: u32, z: u32) -> u32 {
+        (x & y) | (!x & z)
+    }
+    fn g(x: u32, y: u32, z: u32) -> u32 {
+        (x & y) | (x & z) | (y & z)
+    }
+    fn h(x: u32, y: u32, z: u32) -> u32 {
+        x ^ y ^ z
+    }
 
     let bit_len = (data.len() as u64) * 8;
     let mut msg = data.to_vec();
@@ -29,8 +36,10 @@ fn md4_hash(data: &[u8]) -> Vec<u8> {
     msg.extend_from_slice(&bit_len.to_le_bytes());
 
     let (mut a, mut b, mut c, mut d) = (
-        Wrapping(0x67452301u32), Wrapping(0xefcdab89u32),
-        Wrapping(0x98badcfeu32), Wrapping(0x10325476u32),
+        Wrapping(0x67452301u32),
+        Wrapping(0xefcdab89u32),
+        Wrapping(0x98badcfeu32),
+        Wrapping(0x10325476u32),
     );
 
     for chunk in msg.chunks(64) {
@@ -41,28 +50,40 @@ fn md4_hash(data: &[u8]) -> Vec<u8> {
 
         let (aa, bb, cc, dd) = (a, b, c, d);
 
-        let r1 = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
-        let s1 = [3,7,11,19,3,7,11,19,3,7,11,19,3,7,11,19];
+        let r1 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        let s1 = [3, 7, 11, 19, 3, 7, 11, 19, 3, 7, 11, 19, 3, 7, 11, 19];
         for i in 0..16 {
             let val = a + Wrapping(f(b.0, c.0, d.0)) + Wrapping(x[r1[i]]);
-            a = d; d = c; c = b; b = Wrapping(val.0.rotate_left(s1[i]));
+            a = d;
+            d = c;
+            c = b;
+            b = Wrapping(val.0.rotate_left(s1[i]));
         }
 
-        let r2 = [0,4,8,12,1,5,9,13,2,6,10,14,3,7,11,15];
-        let s2 = [3,5,9,13,3,5,9,13,3,5,9,13,3,5,9,13];
+        let r2 = [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15];
+        let s2 = [3, 5, 9, 13, 3, 5, 9, 13, 3, 5, 9, 13, 3, 5, 9, 13];
         for i in 0..16 {
             let val = a + Wrapping(g(b.0, c.0, d.0)) + Wrapping(x[r2[i]]) + Wrapping(0x5A827999);
-            a = d; d = c; c = b; b = Wrapping(val.0.rotate_left(s2[i]));
+            a = d;
+            d = c;
+            c = b;
+            b = Wrapping(val.0.rotate_left(s2[i]));
         }
 
-        let r3 = [0,8,4,12,2,10,6,14,1,9,5,13,3,11,7,15];
-        let s3 = [3,9,11,15,3,9,11,15,3,9,11,15,3,9,11,15];
+        let r3 = [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15];
+        let s3 = [3, 9, 11, 15, 3, 9, 11, 15, 3, 9, 11, 15, 3, 9, 11, 15];
         for i in 0..16 {
             let val = a + Wrapping(h(b.0, c.0, d.0)) + Wrapping(x[r3[i]]) + Wrapping(0x6ED9EBA1);
-            a = d; d = c; c = b; b = Wrapping(val.0.rotate_left(s3[i]));
+            a = d;
+            d = c;
+            c = b;
+            b = Wrapping(val.0.rotate_left(s3[i]));
         }
 
-        a = a + aa; b = b + bb; c = c + cc; d = d + dd;
+        a = a + aa;
+        b = b + bb;
+        c = c + cc;
+        d = d + dd;
     }
 
     let mut result = Vec::with_capacity(16);
@@ -84,18 +105,12 @@ pub fn aes_string_to_key(password: &str, salt: &str, iterations: u32, key_len: u
 }
 
 pub fn aes256_key(password: &str, domain: &str, username: &str) -> Vec<u8> {
-    let salt = format!("{}{}",
-        domain.to_uppercase(),
-        username,
-    );
+    let salt = format!("{}{}", domain.to_uppercase(), username,);
     aes_string_to_key(password, &salt, 4096, 32)
 }
 
 pub fn aes128_key(password: &str, domain: &str, username: &str) -> Vec<u8> {
-    let salt = format!("{}{}",
-        domain.to_uppercase(),
-        username,
-    );
+    let salt = format!("{}{}", domain.to_uppercase(), username,);
     aes_string_to_key(password, &salt, 4096, 16)
 }
 
@@ -187,10 +202,12 @@ mod hex {
     }
 
     pub fn decode(s: &str) -> Result<Vec<u8>, String> {
-        if s.len() % 2 != 0 { return Err("odd length".into()); }
+        if s.len() % 2 != 0 {
+            return Err("odd length".into());
+        }
         (0..s.len())
             .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i+2], 16).map_err(|e| e.to_string()))
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|e| e.to_string()))
             .collect()
     }
 }

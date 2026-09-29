@@ -1,21 +1,21 @@
-use serde_json::value::Value;
-use serde::{Deserialize, Serialize};
 use colored::Colorize;
 use ldap3::SearchEntry;
-use log::{info, debug, trace};
+use log::{debug, info, trace};
+use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::enums::{OBJECT_SID_RE1, SID_PART1_RE1};
-use crate::objects::common::{LdapObject, Session, AceTemplate, Member, SPNTarget, LocalGroup, Link, DCRegistryData};
-use crate::utils::date::{convert_timestamp,string_to_epoch};
-use crate::utils::crypto::convert_encryption_types;
-use crate::enums::acl::{
-    parse_embedded_security_descriptor, parse_ntsecuritydescriptor,
-};
+use crate::enums::acl::{parse_embedded_security_descriptor, parse_ntsecuritydescriptor};
 use crate::enums::secdesc::LdapSid;
 use crate::enums::sid::sid_maker;
 use crate::enums::uacflags::get_flag;
+use crate::enums::{OBJECT_SID_RE1, SID_PART1_RE1};
+use crate::objects::common::{
+    AceTemplate, DCRegistryData, LdapObject, Link, LocalGroup, Member, SPNTarget, Session,
+};
+use crate::utils::crypto::convert_encryption_types;
+use crate::utils::date::{convert_timestamp, string_to_epoch};
 
 use super::common::UserRight;
 
@@ -73,7 +73,9 @@ pub struct Computer {
 impl Computer {
     // New computer.
     pub fn new() -> Self {
-        Self { ..Default::default() }
+        Self {
+            ..Default::default()
+        }
     }
 
     // Immutable access.
@@ -147,7 +149,7 @@ impl Computer {
                 "name" => {
                     if !result_attrs.contains_key("dNSHostName") {
                         let name = &value[0];
-                        let email = format!("{}.{}",name.to_owned(),domain);
+                        let email = format!("{}.{}", name.to_owned(), domain);
                         self.properties.name = email.to_uppercase();
                     }
                 }
@@ -214,7 +216,7 @@ impl Computer {
                         if flag.contains("PasswordNotRequired") {
                             self.properties.passwordnotreqd = true;
                         };
-                         if flag.contains("DontExpirePassword") {
+                        if flag.contains("DontExpirePassword") {
                             self.properties.pwdneverexpires = true;
                         };
                         if flag.contains("ServerTrustAccount") {
@@ -223,7 +225,7 @@ impl Computer {
                         }
                     }
                 }
-                "msDS-AllowedToDelegateTo"  => {
+                "msDS-AllowedToDelegateTo" => {
                     let mut vec_members2: Vec<Member> = Vec::new();
                     for objet in value {
                         let mut member_allowed_to_delegate = Member::new();
@@ -231,12 +233,16 @@ impl Computer {
                         let fqdn = split.collect::<Vec<&str>>()[1];
                         let mut checker = false;
                         for member in &vec_members2 {
-                            if member.object_identifier().contains(fqdn.to_uppercase().as_str()) {
+                            if member
+                                .object_identifier()
+                                .contains(fqdn.to_uppercase().as_str())
+                            {
                                 checker = true;
                             }
                         }
                         if !checker {
-                            *member_allowed_to_delegate.object_identifier_mut() = fqdn.to_uppercase().to_owned().to_uppercase();
+                            *member_allowed_to_delegate.object_identifier_mut() =
+                                fqdn.to_uppercase().to_owned().to_uppercase();
                             *member_allowed_to_delegate.object_type_mut() = "Computer".to_owned();
                             vec_members2.push(member_allowed_to_delegate.to_owned());
                         }
@@ -279,8 +285,9 @@ impl Computer {
                     self.is_deleted = true;
                 }
                 "msDS-SupportedEncryptionTypes" => {
-                    self.properties.supportedencryptiontypes = convert_encryption_types(value[0].parse::<i32>().unwrap_or(0));
-                 }
+                    self.properties.supportedencryptiontypes =
+                        convert_encryption_types(value[0].parse::<i32>().unwrap_or(0));
+                }
                 _ => {}
             }
         }
@@ -322,9 +329,10 @@ impl Computer {
                     let mut allowed_to_act = Member::new();
                     for delegated in relations_ace {
                         if *delegated.right_name() == "GenericAll" {
-                            *allowed_to_act.object_identifier_mut() = delegated.principal_sid().to_string();
+                            *allowed_to_act.object_identifier_mut() =
+                                delegated.principal_sid().to_string();
                             vec_members_allowtoact.push(allowed_to_act.to_owned());
-                            continue
+                            continue;
                         }
                     }
                     self.allowed_to_act = vec_members_allowtoact;
@@ -356,23 +364,16 @@ impl Computer {
         dn_sid.insert(
             self.properties.distinguishedname.to_string(),
             self.object_identifier.to_string(),
-
         );
         // Push DN and Type
-        sid_type.insert(
-            self.object_identifier.to_string(),
-            "Computer".to_string(),
-        );
+        sid_type.insert(self.object_identifier.to_string(), "Computer".to_string());
 
         fqdn_sid.insert(
             self.properties.name.to_string(),
             self.object_identifier.to_string(),
         );
 
-        fqdn_ip.insert(
-            self.properties.name.to_string(),
-            String::from(""),
-        );
+        fqdn_ip.insert(self.properties.name.to_string(), String::from(""));
 
         Ok(())
     }
@@ -394,15 +395,21 @@ impl LdapObject for Computer {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
     fn get_allowed_to_delegate(&self) -> &Vec<Member> {
         &self.allowed_to_delegate
     }
-    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
+    fn get_links(&self) -> &Vec<Link> {
+        &crate::objects::common::EMPTY_VEC_LINK
+    }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_child_objects(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
     fn get_haslaps(&self) -> &bool {
         &self.properties.haslaps
     }
@@ -469,7 +476,7 @@ pub struct ComputerProperties {
     sidhistory: Vec<String>,
     supportedencryptiontypes: Vec<String>,
     #[serde(skip_serializing)]
-    is_dc: bool
+    is_dc: bool,
 }
 
 impl ComputerProperties {

@@ -41,29 +41,27 @@ pub struct FilenameRule {
 
 // ── Content-matching regex patterns ─────────────────────────────────────────
 
-static RE_PASSWORD_IN_CODE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?i)passw(?:or)?d\s*[=:]\s*['"][^'"]{4,}"#).unwrap()
-});
+static RE_PASSWORD_IN_CODE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(?i)passw(?:or)?d\s*[=:]\s*['"][^'"]{4,}"#).unwrap());
 
 static RE_API_KEY_IN_CODE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?i)(?:api[_\-]?key|apikey|api_secret|client_secret|app_secret)\s*[=:]\s*['"][^'"]{4,}"#).unwrap()
+    Regex::new(
+        r#"(?i)(?:api[_\-]?key|apikey|api_secret|client_secret|app_secret)\s*[=:]\s*['"][^'"]{4,}"#,
+    )
+    .unwrap()
 });
 
-static RE_AWS_ACCESS_KEY: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?:AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z2-7]{12,16}").unwrap()
-});
+static RE_AWS_ACCESS_KEY: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?:AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z2-7]{12,16}").unwrap());
 
-static RE_PRIVATE_KEY_HEADER: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"-----BEGIN\s*(?:RSA |OPENSSH |DSA |EC |PGP )?PRIVATE KEY").unwrap()
-});
+static RE_PRIVATE_KEY_HEADER: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"-----BEGIN\s*(?:RSA |OPENSSH |DSA |EC |PGP )?PRIVATE KEY").unwrap());
 
 static RE_CONNECTION_STRING: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)(?:connection\s*string|data\s*source).{0,100}(?:password|pwd)\s*=").unwrap()
 });
 
-static RE_SLACK_TOKEN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"xox[pboa]-[0-9]{10,}").unwrap()
-});
+static RE_SLACK_TOKEN: Lazy<Regex> = Lazy::new(|| Regex::new(r"xox[pboa]-[0-9]{10,}").unwrap());
 
 static RE_SQL_CRED_CREATE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)CREATE\s+(?:USER|LOGIN).{0,200}(?:IDENTIFIED BY|WITH PASSWORD)").unwrap()
@@ -74,20 +72,18 @@ static RE_PS_CREDENTIAL: Lazy<Regex> = Lazy::new(|| {
 });
 
 static RE_CMD_CREDENTIAL: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)(?:net\s+user\s+\S+\s+\S+|psexec.*\s-p\s|net\s+use.*/user:|cmdkey\s+/add)").unwrap()
+    Regex::new(r"(?i)(?:net\s+user\s+\S+\s+\S+|psexec.*\s-p\s|net\s+use.*/user:|cmdkey\s+/add)")
+        .unwrap()
 });
 
 static RE_VIEWSTATE_KEY: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"(?i)(?:validationkey|decryptionkey)\s*=\s*['"][0-9A-Fa-f]{32,}"#).unwrap()
 });
 
-static RE_UNATTEND_PASSWORD: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)<(?:Administrator)?Password>.*<Value>[^<]+</Value>").unwrap()
-});
+static RE_UNATTEND_PASSWORD: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)<(?:Administrator)?Password>.*<Value>[^<]+</Value>").unwrap());
 
-static RE_RDP_PASSWORD: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"password 51:b:").unwrap()
-});
+static RE_RDP_PASSWORD: Lazy<Regex> = Lazy::new(|| Regex::new(r"password 51:b:").unwrap());
 
 static RE_NET_CONFIG_CRED: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)(?:enable\s+password|snmp-server\s+community\s+\S+\s+RW)").unwrap()
@@ -97,20 +93,21 @@ static RE_OAUTH_TOKEN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"(?i)(?:oauth|bearer|token)\s*[=:]\s*['"][a-zA-Z0-9_\-\.]{20,}"#).unwrap()
 });
 
-static RE_S3_URI: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"s3a?://[a-zA-Z0-9\-\+/]{2,}").unwrap()
-});
+static RE_S3_URI: Lazy<Regex> = Lazy::new(|| Regex::new(r"s3a?://[a-zA-Z0-9\-\+/]{2,}").unwrap());
 
 static RE_DB_CONN_STRING: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?i)(?:mysql_connect|pg_connect|psycopg2\.connect|\.getConnection\s*\(\s*"jdbc:)"#).unwrap()
+    Regex::new(
+        r#"(?i)(?:mysql_connect|pg_connect|psycopg2\.connect|\.getConnection\s*\(\s*"jdbc:)"#,
+    )
+    .unwrap()
 });
 
-static RE_GPP_CPASSWORD: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?i)cpassword\s*=\s*"[^"]+"#).unwrap()
-});
+static RE_GPP_CPASSWORD: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(?i)cpassword\s*=\s*"[^"]+"#).unwrap());
 
 static RE_GENERIC_SECRET: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?i)(?:secret|credential|auth_token|access_token)\s*[=:]\s*['"][^'"]{8,}"#).unwrap()
+    Regex::new(r#"(?i)(?:secret|credential|auth_token|access_token)\s*[=:]\s*['"][^'"]{8,}"#)
+        .unwrap()
 });
 
 // ── Rule collections ────────────────────────────────────────────────────────
@@ -228,8 +225,14 @@ static CONTENT_RULES: &[ContentRule] = &[
 
 static EXTENSION_BLACK: ExtensionRule = ExtensionRule {
     extensions: &[
-        "ppk", "kdbx", "kdb", "psafe3", "kwallet",
-        "keychain", "agilekeychain", "cred",
+        "ppk",
+        "kdbx",
+        "kdb",
+        "psafe3",
+        "kwallet",
+        "keychain",
+        "agilekeychain",
+        "cred",
     ],
     severity: Severity::Black,
     description: "Credential vault / SSH key / keychain file",
@@ -237,8 +240,7 @@ static EXTENSION_BLACK: ExtensionRule = ExtensionRule {
 
 static EXTENSION_RED: ExtensionRule = ExtensionRule {
     extensions: &[
-        "pfx", "pem", "der", "p12", "pk12", "pkcs12",
-        "dmp", "vmdk", "vdi", "vhd", "vhdx",
+        "pfx", "pem", "der", "p12", "pk12", "pkcs12", "dmp", "vmdk", "vdi", "vhd", "vhdx",
     ],
     severity: Severity::Red,
     description: "Certificate/private key or memory dump / disk image",
@@ -246,25 +248,28 @@ static EXTENSION_RED: ExtensionRule = ExtensionRule {
 
 static EXTENSION_YELLOW: ExtensionRule = ExtensionRule {
     extensions: &[
-        "mdf", "sdf", "sqldump", "bak", "keytab",
-        "ccache", "pcap", "cap", "pcapng",
+        "mdf", "sdf", "sqldump", "bak", "keytab", "ccache", "pcap", "cap", "pcapng",
     ],
     severity: Severity::Yellow,
     description: "Database dump / Kerberos keytab or ccache / network capture",
 };
 
-static EXTENSION_RULES: &[&ExtensionRule] = &[
-    &EXTENSION_BLACK,
-    &EXTENSION_RED,
-    &EXTENSION_YELLOW,
-];
+static EXTENSION_RULES: &[&ExtensionRule] = &[&EXTENSION_BLACK, &EXTENSION_RED, &EXTENSION_YELLOW];
 
 static FILENAME_BLACK: FilenameRule = FilenameRule {
     names: &[
-        "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
-        "NTDS.DIT", "ntds.dit",
-        "SYSTEM", "SAM", "SECURITY",
-        "shadow", "pwd.db", "passwd",
+        "id_rsa",
+        "id_dsa",
+        "id_ecdsa",
+        "id_ed25519",
+        "NTDS.DIT",
+        "ntds.dit",
+        "SYSTEM",
+        "SAM",
+        "SECURITY",
+        "shadow",
+        "pwd.db",
+        "passwd",
         ".tugboat",
     ],
     severity: Severity::Black,
@@ -273,10 +278,19 @@ static FILENAME_BLACK: FilenameRule = FilenameRule {
 
 static FILENAME_RED: FilenameRule = FilenameRule {
     names: &[
-        "passwords.txt", "pass.txt", "accounts.txt", "secrets.txt",
-        "passwords.doc", "passwords.docx", "passwords.xls", "passwords.xlsx",
-        ".git-credentials", "git-credentials",
-        "web.config", "appsettings.json", "appsettings.Development.json",
+        "passwords.txt",
+        "pass.txt",
+        "accounts.txt",
+        "secrets.txt",
+        "passwords.doc",
+        "passwords.docx",
+        "passwords.xls",
+        "passwords.xlsx",
+        ".git-credentials",
+        "git-credentials",
+        "web.config",
+        "appsettings.json",
+        "appsettings.Development.json",
         "BitlockerLAPSPasswords.csv",
     ],
     severity: Severity::Red,
@@ -285,10 +299,14 @@ static FILENAME_RED: FilenameRule = FilenameRule {
 
 static FILENAME_YELLOW: FilenameRule = FilenameRule {
     names: &[
-        "unattend.xml", "Unattend.xml",
-        "Autounattend.xml", "autounattend.xml",
-        "customsettings.ini", "CustomSettings.ini",
-        "sysprep.xml", "sysprep.inf",
+        "unattend.xml",
+        "Unattend.xml",
+        "Autounattend.xml",
+        "autounattend.xml",
+        "customsettings.ini",
+        "CustomSettings.ini",
+        "sysprep.xml",
+        "sysprep.inf",
     ],
     severity: Severity::Yellow,
     description: "Deployment config (may contain cleartext credentials)",
@@ -296,10 +314,14 @@ static FILENAME_YELLOW: FilenameRule = FilenameRule {
 
 static FILENAME_GREEN: FilenameRule = FilenameRule {
     names: &[
-        ".bash_history", ".zsh_history", ".sh_history",
+        ".bash_history",
+        ".zsh_history",
+        ".sh_history",
         "ConsoleHost_History.txt",
-        ".irb_history", ".python_history",
-        ".psql_history", ".mysql_history",
+        ".irb_history",
+        ".python_history",
+        ".psql_history",
+        ".mysql_history",
     ],
     severity: Severity::Green,
     description: "Shell/command history (may contain typed credentials)",
@@ -419,7 +441,7 @@ mod tests {
 
     #[test]
     fn detect_slack_token() {
-        let text = "token=xoxb-9999999999";  // minimal match for regex test
+        let text = "token=xoxb-9999999999"; // minimal match for regex test
         let hits = scan_content(text);
         assert!(hits.iter().any(|h| h.rule_name == "SlackToken"));
     }

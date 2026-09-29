@@ -1,19 +1,19 @@
 use colored::Colorize;
-use serde::{Deserialize, Serialize};
-use serde_json::value::Value;
-use x509_parser::oid_registry::asn1_rs::oid;
-use x509_parser::prelude::*;
 use ldap3::SearchEntry;
 use log::{debug, error, info, trace};
+use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::error::Error;
+use x509_parser::oid_registry::asn1_rs::oid;
+use x509_parser::prelude::*;
 
 use crate::enums::{
-    MaskFlags, SecurityDescriptor, AceFormat, Acl,
-    decode_guid_le, parse_ntsecuritydescriptor, sid_maker, parse_ca_security
+    decode_guid_le, parse_ca_security, parse_ntsecuritydescriptor, sid_maker, AceFormat, Acl,
+    MaskFlags, SecurityDescriptor,
 };
 use crate::json::checker::common::get_name_from_full_distinguishedname;
-use crate::objects::common::{LdapObject, AceTemplate, SPNTarget, Link, Member};
+use crate::objects::common::{AceTemplate, LdapObject, Link, Member, SPNTarget};
 use crate::utils::crypto::calculate_sha1;
 use crate::utils::date::string_to_epoch;
 
@@ -72,8 +72,10 @@ pub struct EnterpriseCA {
 
 impl EnterpriseCA {
     // New EnterpriseCA
-    pub fn new() -> Self { 
-        Self { ..Default::default() } 
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
     }
 
     // Immutable access.
@@ -147,29 +149,39 @@ impl EnterpriseCA {
                     if let Ok(flags_val) = value[0].parse::<u64>() {
                         // EDITF_ATTRIBUTESUBJECTALTNAME2 = 0x00040000
                         if flags_val & 0x00040000 != 0 {
-                            self.ca_registry_data.is_user_specifies_san_enabled = IsUserSpecifiesSanEnabled {
-                                value: true,
-                                collected: true,
-                                failure_reason: None,
-                            };
+                            self.ca_registry_data.is_user_specifies_san_enabled =
+                                IsUserSpecifiesSanEnabled {
+                                    value: true,
+                                    collected: true,
+                                    failure_reason: None,
+                                };
                             self.properties.isuserspecifiessanenabledcollected = true;
                         }
                     }
                 }
                 "certificateTemplates" => {
                     if value.is_empty() {
-                        error!("No certificate templates enabled for {}", self.properties.caname);
+                        error!(
+                            "No certificate templates enabled for {}",
+                            self.properties.caname
+                        );
                     } else {
                         //ca.enabled_templates = value.to_vec();
-                        info!("Found {} enabled certificate templates", value.len().to_string().bold());
+                        info!(
+                            "Found {} enabled certificate templates",
+                            value.len().to_string().bold()
+                        );
                         trace!("Enabled certificate templates: {:?}", value);
-                        let enabled_templates: Vec<Member> = value.iter().map(|template_name| {
-                            let mut member = Member::new();
-                            *member.object_identifier_mut() = template_name.to_owned();
-                            *member.object_type_mut() = String::from("CertTemplate");
+                        let enabled_templates: Vec<Member> = value
+                            .iter()
+                            .map(|template_name| {
+                                let mut member = Member::new();
+                                *member.object_identifier_mut() = template_name.to_owned();
+                                *member.object_type_mut() = String::from("CertTemplate");
 
-                            member
-                        }).collect();
+                                member
+                            })
+                            .collect();
                         self.enabled_cert_templates = enabled_templates;
                     }
                 }
@@ -210,7 +222,8 @@ impl EnterpriseCA {
                     // HostingComputer
                     self.hosting_computer = Self::get_hosting_computer(&value[0], domain);
                     // CASecurity
-                    let ca_security_data = parse_ca_security(&value[0], &self.hosting_computer, domain);
+                    let ca_security_data =
+                        parse_ca_security(&value[0], &self.hosting_computer, domain);
                     if !ca_security_data.is_empty() {
                         let ca_security = CASecurity {
                             data: ca_security_data,
@@ -224,7 +237,7 @@ impl EnterpriseCA {
                         let ca_security = CASecurity {
                             data: Vec::new(),
                             collected: false,
-                            failure_reason: Some(String::from("Failed to get CASecurity!"))
+                            failure_reason: Some(String::from("Failed to get CASecurity!")),
                         };
                         self.properties.casecuritycollected = false;
                         let ca_registry_data = CARegistryData::new(ca_security);
@@ -245,19 +258,22 @@ impl EnterpriseCA {
                             // println!("Basic Constraints Extensions:");
                             for ext in cert.extensions() {
                                 // println!("{:?} : {:?}",&ext.oid, ext);
-                                if &ext.oid == &oid!(2.5.29.19) {
+                                if &ext.oid == &oid!(2.5.29 .19) {
                                     // <https://docs.rs/x509-parser/latest/x509_parser/extensions/struct.BasicConstraints.html>
-                                    if let ParsedExtension::BasicConstraints(basic_constraints) = &ext.parsed_extension() {
+                                    if let ParsedExtension::BasicConstraints(basic_constraints) =
+                                        &ext.parsed_extension()
+                                    {
                                         let _ca = &basic_constraints.ca;
-                                        let _path_len_constraint = &basic_constraints.path_len_constraint;
+                                        let _path_len_constraint =
+                                            &basic_constraints.path_len_constraint;
                                         // println!("ca: {:?}", _ca);
                                         // println!("path_len_constraint: {:?}", _path_len_constraint);
                                         match _path_len_constraint {
                                             Some(_path_len_constraint) => {
                                                 if _path_len_constraint > &0 {
                                                     self.properties.hasbasicconstraints = true;
-                                                    self.properties.basicconstraintpathlength = _path_len_constraint.to_owned();
-
+                                                    self.properties.basicconstraintpathlength =
+                                                        _path_len_constraint.to_owned();
                                                 } else {
                                                     self.properties.hasbasicconstraints = false;
                                                     self.properties.basicconstraintpathlength = 0;
@@ -271,7 +287,7 @@ impl EnterpriseCA {
                                     }
                                 }
                             }
-                        },
+                        }
                         _ => error!("CA x509 certificate parsing failed: {:?}", res),
                     }
                 }
@@ -298,10 +314,7 @@ impl EnterpriseCA {
     }
 
     /// Function to get HostingComputer from ACL if ACE get ManageCertificates and is not Group.
-    fn get_hosting_computer(
-        nt: &[u8],
-        domain: &str,
-    ) -> String {
+    fn get_hosting_computer(nt: &[u8], domain: &str) -> String {
         let mut hosting_computer = String::from("Not found");
         let blacklist_sid = [
             // <https://learn.microsoft.com/fr-fr/windows-server/identity/ad-ds/manage/understand-security-identifiers>
@@ -310,8 +323,7 @@ impl EnterpriseCA {
             "-512", // Domain Admins
         ];
         let secdesc: SecurityDescriptor = SecurityDescriptor::parse(nt).unwrap().1;
-        if secdesc.offset_dacl as usize != 0 
-        {
+        if secdesc.offset_dacl as usize != 0 {
             let res = Acl::parse(&nt[secdesc.offset_dacl as usize..]);
             match res {
                 Ok(_res) => {
@@ -319,22 +331,25 @@ impl EnterpriseCA {
                     let aces = dacl.data;
                     for ace in aces {
                         if ace.ace_type == 0x00 {
-                            let sid = sid_maker(AceFormat::get_sid(ace.data.to_owned()).unwrap(), domain);
+                            let sid =
+                                sid_maker(AceFormat::get_sid(ace.data.to_owned()).unwrap(), domain);
                             let mask = match AceFormat::get_mask(&ace.data) {
                                 Some(mask) => mask,
                                 None => continue,
                             };
                             if (MaskFlags::MANAGE_CERTIFICATES.bits() | mask) == mask
-                            && !blacklist_sid.iter().any(|blacklisted| sid.ends_with(blacklisted)) 
+                                && !blacklist_sid
+                                    .iter()
+                                    .any(|blacklisted| sid.ends_with(blacklisted))
                             {
                                 // println!("SID MANAGE_CERTIFICATES: {:?}",&sid);
                                 hosting_computer = sid;
-                                return hosting_computer
+                                return hosting_computer;
                             }
                         }
                     }
-                },
-                Err(err) => error!("Error. Reason: {err}")
+                }
+                Err(err) => error!("Error. Reason: {err}"),
             }
         }
         hosting_computer
@@ -357,13 +372,21 @@ impl LdapObject for EnterpriseCA {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
-    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
+    fn get_links(&self) -> &Vec<Link> {
+        &crate::objects::common::EMPTY_VEC_LINK
+    }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_child_objects(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
     fn get_haslaps(&self) -> &bool {
         &false
     }
@@ -403,7 +426,6 @@ impl LdapObject for EnterpriseCA {
         // Not used by current object.
     }
 }
-
 
 // EnterpriseCA properties structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -453,9 +475,9 @@ impl Default for EnterpriseCAProperties {
             enrollmentagentrestrictionscollected: false,
             isuserspecifiessanenabledcollected: false,
             roleseparationenabledcollected: false,
-       }
+        }
     }
- }
+}
 
 // CARegistryData properties structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -471,10 +493,8 @@ pub struct CARegistryData {
 }
 
 impl CARegistryData {
-    pub fn new(
-        ca_security: CASecurity,
-    ) -> Self { 
-        Self { 
+    pub fn new(ca_security: CASecurity) -> Self {
+        Self {
             ca_security,
             ..Default::default()
         }
@@ -491,7 +511,6 @@ pub struct CASecurity {
     #[serde(rename = "FailureReason")]
     failure_reason: Option<String>,
 }
-
 
 impl Default for CASecurity {
     fn default() -> CASecurity {

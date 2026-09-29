@@ -13,13 +13,20 @@ pub struct KrbCredTicket {
 impl KrbCredTicket {
     pub fn from_asrep(asrep_bytes: &[u8]) -> Result<Self, Box<dyn Error>> {
         let inner = unwrap_application(asrep_bytes)?;
-        let ticket_raw = extract_context_tag_content(&inner, 5)
-            .ok_or("ticket field [5] not found in AS-REP")?;
+        let ticket_raw =
+            extract_context_tag_content(&inner, 5).ok_or("ticket field [5] not found in AS-REP")?;
         let realm = extract_string_from_context(&inner, 3).unwrap_or_default();
         let sname = extract_sname_from_ticket(&ticket_raw);
         let enc_part_raw = extract_context_tag_content(&inner, 6).unwrap_or_default();
         let (etype, _kvno, cipher) = parse_encrypted_data(&enc_part_raw);
-        Ok(Self { raw: ticket_raw, realm, sname, enc_part: cipher, etype, kvno: None })
+        Ok(Self {
+            raw: ticket_raw,
+            realm,
+            sname,
+            enc_part: cipher,
+            etype,
+            kvno: None,
+        })
     }
 
     pub fn from_tgsrep(tgsrep_bytes: &[u8]) -> Result<Self, Box<dyn Error>> {
@@ -30,7 +37,14 @@ impl KrbCredTicket {
         let sname = extract_sname_from_ticket(&ticket_raw);
         let enc_part_raw = extract_context_tag_content(&inner, 6).unwrap_or_default();
         let (etype, _kvno, cipher) = parse_encrypted_data(&enc_part_raw);
-        Ok(Self { raw: ticket_raw, realm, sname, enc_part: cipher, etype, kvno: None })
+        Ok(Self {
+            raw: ticket_raw,
+            realm,
+            sname,
+            enc_part: cipher,
+            etype,
+            kvno: None,
+        })
     }
 
     pub fn from_kirbi(kirbi_bytes: &[u8]) -> Result<Self, Box<dyn Error>> {
@@ -78,7 +92,11 @@ fn unwrap_application(data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     }
     let tag = data[0];
     if tag & 0x60 != 0x60 && tag != 0x30 {
-        return Err(format!("unexpected tag 0x{:02x}, expected APPLICATION or SEQUENCE", tag).into());
+        return Err(format!(
+            "unexpected tag 0x{:02x}, expected APPLICATION or SEQUENCE",
+            tag
+        )
+        .into());
     }
     let mut pos = 1;
     let len = parse_asn1_length(data, &mut pos)?;
@@ -347,8 +365,16 @@ fn base64_encode(data: &[u8]) -> String {
         let triple = (b0 << 16) | (b1 << 8) | b2;
         result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
         result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
-        result.push(if chunk.len() > 1 { CHARS[((triple >> 6) & 0x3F) as usize] as char } else { '=' });
-        result.push(if chunk.len() > 2 { CHARS[(triple & 0x3F) as usize] as char } else { '=' });
+        result.push(if chunk.len() > 1 {
+            CHARS[((triple >> 6) & 0x3F) as usize] as char
+        } else {
+            '='
+        });
+        result.push(if chunk.len() > 2 {
+            CHARS[(triple & 0x3F) as usize] as char
+        } else {
+            '='
+        });
     }
     result
 }

@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::visit::EdgeRef;
 use crate::api::ADResults;
 use crate::objects::common::LdapObject;
+use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::visit::EdgeRef;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct AdNode {
@@ -62,8 +62,12 @@ pub struct AdGraph {
 }
 
 impl AdGraph {
-    pub fn node_count(&self) -> usize { self.graph.node_count() }
-    pub fn edge_count(&self) -> usize { self.graph.edge_count() }
+    pub fn node_count(&self) -> usize {
+        self.graph.node_count()
+    }
+    pub fn edge_count(&self) -> usize {
+        self.graph.edge_count()
+    }
 
     pub fn get_node(&self, oid: &str) -> Option<&AdNode> {
         self.index.get(oid).map(|&idx| &self.graph[idx])
@@ -92,28 +96,39 @@ impl AdGraph {
     }
 
     pub fn add_edge_unique(&mut self, src: NodeIndex, dst: NodeIndex, label: &str) {
-        let exists = self.graph.edges_connecting(src, dst)
+        let exists = self
+            .graph
+            .edges_connecting(src, dst)
             .any(|e| e.weight().label == label);
         if !exists {
-            self.graph.add_edge(src, dst, AdEdge { label: label.to_string() });
+            self.graph.add_edge(
+                src,
+                dst,
+                AdEdge {
+                    label: label.to_string(),
+                },
+            );
         }
     }
 
     pub fn nodes_by_type(&self, node_type: &str) -> Vec<NodeIndex> {
-        self.graph.node_indices()
+        self.graph
+            .node_indices()
             .filter(|&idx| self.graph[idx].node_type == node_type)
             .collect()
     }
 
     pub fn outgoing_edges(&self, idx: NodeIndex) -> Vec<(NodeIndex, &str)> {
-        self.graph.edges(idx)
+        self.graph
+            .edges(idx)
             .map(|e| (e.target(), e.weight().label.as_str()))
             .collect()
     }
 
     pub fn incoming_edges(&self, idx: NodeIndex) -> Vec<(NodeIndex, &str)> {
         use petgraph::Direction;
-        self.graph.edges_directed(idx, Direction::Incoming)
+        self.graph
+            .edges_directed(idx, Direction::Incoming)
             .map(|e| (e.source(), e.weight().label.as_str()))
             .collect()
     }
@@ -141,33 +156,53 @@ pub fn build_graph(ad: &ADResults, domain: &str) -> AdGraph {
 
     mark_high_value_targets(&mut g);
 
-    log::info!("Graph built: {} nodes, {} edges", g.node_count(), g.edge_count());
+    log::info!(
+        "Graph built: {} nodes, {} edges",
+        g.node_count(),
+        g.edge_count()
+    );
     g
 }
 
-fn process_aces(g: &mut AdGraph, owner_idx: NodeIndex, aces: &[crate::objects::common::AceTemplate]) {
+fn process_aces(
+    g: &mut AdGraph,
+    owner_idx: NodeIndex,
+    aces: &[crate::objects::common::AceTemplate],
+) {
     for ace in aces {
         let sid = ace.principal_sid();
         let ptype = ace.principal_type();
         let right = ace.right_name();
 
-        if sid.is_empty() { continue; }
+        if sid.is_empty() {
+            continue;
+        }
         let target_idx = g.ensure_node(sid, sid, ptype);
         g.add_edge_unique(target_idx, owner_idx, right);
     }
 }
 
-fn process_members(g: &mut AdGraph, group_idx: NodeIndex, members: &[crate::objects::common::Member]) {
+fn process_members(
+    g: &mut AdGraph,
+    group_idx: NodeIndex,
+    members: &[crate::objects::common::Member],
+) {
     for member in members {
         let oid = member.object_identifier();
         let otype = member.object_type();
-        if oid.is_empty() { continue; }
+        if oid.is_empty() {
+            continue;
+        }
         let member_idx = g.ensure_node(oid, oid, otype);
         g.add_edge_unique(member_idx, group_idx, "MemberOf");
     }
 }
 
-fn process_contained_by(g: &mut AdGraph, child_idx: NodeIndex, contained_by: &Option<crate::objects::common::Member>) {
+fn process_contained_by(
+    g: &mut AdGraph,
+    child_idx: NodeIndex,
+    contained_by: &Option<crate::objects::common::Member>,
+) {
     if let Some(parent) = contained_by {
         let pid = parent.object_identifier();
         let ptype = parent.object_type();
@@ -182,7 +217,10 @@ fn add_users(g: &mut AdGraph, ad: &ADResults) {
     for user in &ad.users {
         let json = user.to_json();
         let oid = user.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "User");
 
         let n = &mut g.graph[idx];
@@ -190,21 +228,36 @@ fn add_users(g: &mut AdGraph, ad: &ADResults) {
         n.node_type = "User".to_string();
         n.enabled = json["Properties"]["enabled"].as_bool().unwrap_or(true);
         n.props.has_spn = json["Properties"]["hasspn"].as_bool().unwrap_or(false);
-        n.props.dont_req_preauth = json["Properties"]["dontreqpreauth"].as_bool().unwrap_or(false);
-        n.props.pwd_never_expires = json["Properties"]["pwdneverexpires"].as_bool().unwrap_or(false);
-        n.props.pwd_not_required = json["Properties"]["passwordnotreqd"].as_bool().unwrap_or(false);
-        n.props.unconstrained_delegation = json["Properties"]["unconstraineddelegation"].as_bool().unwrap_or(false);
-        n.props.trusted_to_auth = json["Properties"]["trustedtoauth"].as_bool().unwrap_or(false);
+        n.props.dont_req_preauth = json["Properties"]["dontreqpreauth"]
+            .as_bool()
+            .unwrap_or(false);
+        n.props.pwd_never_expires = json["Properties"]["pwdneverexpires"]
+            .as_bool()
+            .unwrap_or(false);
+        n.props.pwd_not_required = json["Properties"]["passwordnotreqd"]
+            .as_bool()
+            .unwrap_or(false);
+        n.props.unconstrained_delegation = json["Properties"]["unconstraineddelegation"]
+            .as_bool()
+            .unwrap_or(false);
+        n.props.trusted_to_auth = json["Properties"]["trustedtoauth"]
+            .as_bool()
+            .unwrap_or(false);
         n.props.admin_count = json["Properties"]["admincount"].as_bool().unwrap_or(false);
         n.props.sensitive = json["Properties"]["sensitive"].as_bool().unwrap_or(false);
         n.props.description = json["Properties"]["description"].as_str().map(String::from);
-        n.props.last_logon = json["Properties"]["lastlogontimestamp"].as_i64().unwrap_or(-1);
+        n.props.last_logon = json["Properties"]["lastlogontimestamp"]
+            .as_i64()
+            .unwrap_or(-1);
         n.props.pwd_last_set = json["Properties"]["pwdlastset"].as_i64().unwrap_or(-1);
         n.props.when_created = json["Properties"]["whencreated"].as_i64().unwrap_or(-1);
-        n.props.sam_account_name = json["Properties"]["samaccountname"].as_str().map(String::from);
+        n.props.sam_account_name = json["Properties"]["samaccountname"]
+            .as_str()
+            .map(String::from);
 
         if let Some(spns) = json["Properties"]["serviceprincipalnames"].as_array() {
-            n.props.service_principal_names = spns.iter()
+            n.props.service_principal_names = spns
+                .iter()
                 .filter_map(|s| s.as_str().map(String::from))
                 .collect();
         }
@@ -225,7 +278,10 @@ fn add_groups(g: &mut AdGraph, ad: &ADResults) {
     for group in &ad.groups {
         let json = group.to_json();
         let oid = group.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "Group");
 
         let n = &mut g.graph[idx];
@@ -253,16 +309,22 @@ fn add_computers(g: &mut AdGraph, ad: &ADResults) {
     for computer in &ad.computers {
         let json = computer.to_json();
         let oid = computer.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "Computer");
 
         let n = &mut g.graph[idx];
         n.name = name;
         n.node_type = "Computer".to_string();
         n.enabled = json["Properties"]["enabled"].as_bool().unwrap_or(true);
-        n.props.unconstrained_delegation = json["Properties"]["unconstraineddelegation"].as_bool().unwrap_or(false);
+        n.props.unconstrained_delegation = json["Properties"]["unconstraineddelegation"]
+            .as_bool()
+            .unwrap_or(false);
         n.props.has_laps = json["Properties"]["haslaps"].as_bool().unwrap_or(false);
-        n.props.dns_hostname = json["Properties"]["dnshostname"].as_str()
+        n.props.dns_hostname = json["Properties"]["dnshostname"]
+            .as_str()
             .or_else(|| json["Properties"]["name"].as_str())
             .map(String::from);
 
@@ -300,11 +362,17 @@ fn add_computers(g: &mut AdGraph, ad: &ADResults) {
         if let Some(locals) = json["LocalGroups"].as_array() {
             for lg in locals {
                 let lg_name = lg["ObjectIdentifier"].as_str().unwrap_or("").to_uppercase();
-                let edge_label = if lg_name.ends_with("-544") { "AdminTo" }
-                    else if lg_name.ends_with("-555") { "CanRDP" }
-                    else if lg_name.ends_with("-562") { "ExecuteDCOM" }
-                    else if lg_name.ends_with("-580") { "CanPSRemote" }
-                    else { continue };
+                let edge_label = if lg_name.ends_with("-544") {
+                    "AdminTo"
+                } else if lg_name.ends_with("-555") {
+                    "CanRDP"
+                } else if lg_name.ends_with("-562") {
+                    "ExecuteDCOM"
+                } else if lg_name.ends_with("-580") {
+                    "CanPSRemote"
+                } else {
+                    continue;
+                };
 
                 if let Some(results) = lg["Results"].as_array() {
                     for r in results {
@@ -346,7 +414,10 @@ fn add_ous(g: &mut AdGraph, ad: &ADResults) {
     for ou in &ad.ous {
         let json = ou.to_json();
         let oid = ou.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "OU");
         g.graph[idx].name = name;
         g.graph[idx].node_type = "OU".to_string();
@@ -381,7 +452,10 @@ fn add_domains(g: &mut AdGraph, ad: &ADResults) {
     for domain in &ad.domains {
         let json = domain.to_json();
         let oid = domain.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "Domain");
         g.graph[idx].name = name;
         g.graph[idx].node_type = "Domain".to_string();
@@ -430,7 +504,10 @@ fn add_gpos(g: &mut AdGraph, ad: &ADResults) {
     for gpo in &ad.gpos {
         let json = gpo.to_json();
         let oid = gpo.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "GPO");
         g.graph[idx].name = name;
         g.graph[idx].node_type = "GPO".to_string();
@@ -443,7 +520,10 @@ fn add_containers(g: &mut AdGraph, ad: &ADResults) {
     for container in &ad.containers {
         let json = container.to_json();
         let oid = container.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "Container");
         g.graph[idx].name = name;
         g.graph[idx].node_type = "Container".to_string();
@@ -468,14 +548,21 @@ fn add_enterprise_cas(g: &mut AdGraph, ad: &ADResults) {
     for ca in &ad.enterprisecas {
         let json = ca.to_json();
         let oid = ca.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "EnterpriseCA");
         g.graph[idx].name = name;
         g.graph[idx].node_type = "EnterpriseCA".to_string();
-        g.graph[idx].props.web_enrollment = json["Properties"]["webenrollmenturi"].as_str()
-            .map(|s| !s.is_empty()).unwrap_or(false);
-        g.graph[idx].props.user_specifies_san = json["CARegistryData"]["IsUserSpecifiesSanEnabled"]["Value"]
-            .as_bool().unwrap_or(false);
+        g.graph[idx].props.web_enrollment = json["Properties"]["webenrollmenturi"]
+            .as_str()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+        g.graph[idx].props.user_specifies_san = json["CARegistryData"]["IsUserSpecifiesSanEnabled"]
+            ["Value"]
+            .as_bool()
+            .unwrap_or(false);
 
         if let Some(templates) = json["EnabledCertTemplates"].as_array() {
             for t in templates {
@@ -497,18 +584,33 @@ fn add_cert_templates(g: &mut AdGraph, ad: &ADResults) {
     for tmpl in &ad.certtemplates {
         let json = tmpl.to_json();
         let oid = tmpl.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "CertTemplate");
         let n = &mut g.graph[idx];
         n.name = name;
         n.node_type = "CertTemplate".to_string();
-        n.props.client_auth = json["Properties"]["clientauthentication"].as_bool().unwrap_or(false);
-        n.props.enrollee_supplies_subject = json["Properties"]["enrolleesuppliessubject"].as_bool().unwrap_or(false);
-        n.props.requires_manager_approval = json["Properties"]["requiresmanagerapproval"].as_bool().unwrap_or(false);
-        n.props.no_security_extension = json["Properties"]["nosecurityextension"].as_bool().unwrap_or(false);
+        n.props.client_auth = json["Properties"]["clientauthentication"]
+            .as_bool()
+            .unwrap_or(false);
+        n.props.enrollee_supplies_subject = json["Properties"]["enrolleesuppliessubject"]
+            .as_bool()
+            .unwrap_or(false);
+        n.props.requires_manager_approval = json["Properties"]["requiresmanagerapproval"]
+            .as_bool()
+            .unwrap_or(false);
+        n.props.no_security_extension = json["Properties"]["nosecurityextension"]
+            .as_bool()
+            .unwrap_or(false);
         n.props.schema_version = json["Properties"]["schemaversion"].as_i64().unwrap_or(0) as i32;
-        n.props.authorized_signatures_required = json["Properties"]["authorizedsignaturesrequired"].as_i64().unwrap_or(0) as i32;
-        n.props.enrollment_agent = json["Properties"]["isenrollmentagent"].as_bool().unwrap_or(false);
+        n.props.authorized_signatures_required = json["Properties"]["authorizedsignaturesrequired"]
+            .as_i64()
+            .unwrap_or(0) as i32;
+        n.props.enrollment_agent = json["Properties"]["isenrollmentagent"]
+            .as_bool()
+            .unwrap_or(false);
         n.props.template_name = json["Properties"]["name"].as_str().map(String::from);
 
         n.enabled = json["Properties"]["enabled"].as_bool().unwrap_or(true);
@@ -522,7 +624,10 @@ fn add_root_cas(g: &mut AdGraph, ad: &ADResults) {
     for ca in &ad.rootcas {
         let json = ca.to_json();
         let oid = ca.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "RootCA");
         g.graph[idx].name = name;
         g.graph[idx].node_type = "RootCA".to_string();
@@ -535,7 +640,10 @@ fn add_aiacas(g: &mut AdGraph, ad: &ADResults) {
     for ca in &ad.aiacas {
         let json = ca.to_json();
         let oid = ca.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "AIACA");
         g.graph[idx].name = name;
         g.graph[idx].node_type = "AIACA".to_string();
@@ -548,7 +656,10 @@ fn add_ntauth_stores(g: &mut AdGraph, ad: &ADResults) {
     for store in &ad.ntauthstores {
         let json = store.to_json();
         let oid = store.get_object_identifier().clone();
-        let name = json["Properties"]["name"].as_str().unwrap_or("").to_string();
+        let name = json["Properties"]["name"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let idx = g.ensure_node(&oid, &name, "NTAuthStore");
         g.graph[idx].name = name;
         g.graph[idx].node_type = "NTAuthStore".to_string();
@@ -558,11 +669,19 @@ fn add_ntauth_stores(g: &mut AdGraph, ad: &ADResults) {
 }
 
 const HIGH_VALUE_GROUPS: &[&str] = &[
-    "DOMAIN ADMINS", "ENTERPRISE ADMINS", "ADMINISTRATORS",
-    "DOMAIN CONTROLLERS", "SCHEMA ADMINS", "ACCOUNT OPERATORS",
-    "SERVER OPERATORS", "BACKUP OPERATORS", "PRINT OPERATORS",
-    "KEY ADMINS", "ENTERPRISE KEY ADMINS",
-    "CERT PUBLISHERS", "DNSADMINS",
+    "DOMAIN ADMINS",
+    "ENTERPRISE ADMINS",
+    "ADMINISTRATORS",
+    "DOMAIN CONTROLLERS",
+    "SCHEMA ADMINS",
+    "ACCOUNT OPERATORS",
+    "SERVER OPERATORS",
+    "BACKUP OPERATORS",
+    "PRINT OPERATORS",
+    "KEY ADMINS",
+    "ENTERPRISE KEY ADMINS",
+    "CERT PUBLISHERS",
+    "DNSADMINS",
 ];
 
 fn mark_high_value_targets(g: &mut AdGraph) {
@@ -572,9 +691,9 @@ fn mark_high_value_targets(g: &mut AdGraph) {
         let ntype = g.graph[idx].node_type.clone();
 
         let is_hv = match ntype.as_str() {
-            "Group" => HIGH_VALUE_GROUPS.iter().any(|hv| {
-                name_upper.starts_with(&format!("{}@", hv))
-            }),
+            "Group" => HIGH_VALUE_GROUPS
+                .iter()
+                .any(|hv| name_upper.starts_with(&format!("{}@", hv))),
             "Domain" => true,
             "Computer" => {
                 // DCs are high value
@@ -582,7 +701,9 @@ fn mark_high_value_targets(g: &mut AdGraph) {
                     if e.weight().label == "MemberOf" {
                         let target = &g.graph[e.target()];
                         target.name.to_uppercase().contains("DOMAIN CONTROLLERS")
-                    } else { false }
+                    } else {
+                        false
+                    }
                 })
             }
             "EnterpriseCA" | "RootCA" | "NTAuthStore" => true,

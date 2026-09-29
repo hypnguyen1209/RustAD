@@ -5,14 +5,21 @@
 
 /// Encode `input` to standard Base64 (RFC 4648, with `=` padding).
 pub fn b64_encode(input: &[u8]) -> String {
-    const TABLE: &[u8] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
     let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
     for chunk in input.chunks(3) {
         let b0 = chunk[0] as usize;
-        let b1 = if chunk.len() > 1 { chunk[1] as usize } else { 0 };
-        let b2 = if chunk.len() > 2 { chunk[2] as usize } else { 0 };
+        let b1 = if chunk.len() > 1 {
+            chunk[1] as usize
+        } else {
+            0
+        };
+        let b2 = if chunk.len() > 2 {
+            chunk[2] as usize
+        } else {
+            0
+        };
 
         out.push(TABLE[(b0 >> 2) & 0x3f] as char);
         out.push(TABLE[((b0 << 4) | (b1 >> 4)) & 0x3f] as char);
@@ -72,7 +79,7 @@ pub fn b64_decode(input: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-// Tests 
+// Tests
 
 #[cfg(test)]
 mod tests {
@@ -81,21 +88,21 @@ mod tests {
     #[test]
     fn rfc4648_vectors() {
         // Official RFC 4648 §10 test vectors
-        assert_eq!(b64_encode(b""),       "");
-        assert_eq!(b64_encode(b"f"),      "Zg==");
-        assert_eq!(b64_encode(b"fo"),     "Zm8=");
-        assert_eq!(b64_encode(b"foo"),    "Zm9v");
-        assert_eq!(b64_encode(b"foob"),   "Zm9vYg==");
-        assert_eq!(b64_encode(b"fooba"),  "Zm9vYmE=");
+        assert_eq!(b64_encode(b""), "");
+        assert_eq!(b64_encode(b"f"), "Zg==");
+        assert_eq!(b64_encode(b"fo"), "Zm8=");
+        assert_eq!(b64_encode(b"foo"), "Zm9v");
+        assert_eq!(b64_encode(b"foob"), "Zm9vYg==");
+        assert_eq!(b64_encode(b"fooba"), "Zm9vYmE=");
         assert_eq!(b64_encode(b"foobar"), "Zm9vYmFy");
     }
 
     #[test]
     fn decode_rfc4648_vectors() {
-        assert_eq!(b64_decode(""),         Some(b"".to_vec()));
-        assert_eq!(b64_decode("Zg=="),     Some(b"f".to_vec()));
-        assert_eq!(b64_decode("Zm8="),     Some(b"fo".to_vec()));
-        assert_eq!(b64_decode("Zm9v"),     Some(b"foo".to_vec()));
+        assert_eq!(b64_decode(""), Some(b"".to_vec()));
+        assert_eq!(b64_decode("Zg=="), Some(b"f".to_vec()));
+        assert_eq!(b64_decode("Zm8="), Some(b"fo".to_vec()));
+        assert_eq!(b64_decode("Zm9v"), Some(b"foo".to_vec()));
         assert_eq!(b64_decode("Zm9vYg=="), Some(b"foob".to_vec()));
         assert_eq!(b64_decode("Zm9vYmE="), Some(b"fooba".to_vec()));
         assert_eq!(b64_decode("Zm9vYmFy"), Some(b"foobar".to_vec()));
@@ -112,8 +119,8 @@ mod tests {
     #[test]
     fn decode_without_padding() {
         // Padding is optional on input
-        assert_eq!(b64_decode("Zg"),   Some(b"f".to_vec()));
-        assert_eq!(b64_decode("Zm8"),  Some(b"fo".to_vec()));
+        assert_eq!(b64_decode("Zg"), Some(b"f".to_vec()));
+        assert_eq!(b64_decode("Zm8"), Some(b"fo".to_vec()));
     }
 
     #[test]

@@ -32,7 +32,10 @@ const KRB5_OID: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x12, 0x01, 0x02, 0x02];
 /// Wrap a raw AP-REQ DER as the GSS-Kerberos mechToken
 /// ([APPLICATION 0] { krb5-OID, TOK_ID=0x0100, AP-REQ }).
 fn gss_krb5_aprep(ap_req_der: &[u8]) -> Vec<u8> {
-    trace!("[gss] wrapping AP-REQ ({} bytes) as GSS-Kerberos mechToken", ap_req_der.len());
+    trace!(
+        "[gss] wrapping AP-REQ ({} bytes) as GSS-Kerberos mechToken",
+        ap_req_der.len()
+    );
     let mut inner = Vec::new();
     inner.extend_from_slice(&tlv(0x06, KRB5_OID));
     inner.extend_from_slice(&[0x01, 0x00]); // TOK_ID = AP-REQ
@@ -44,18 +47,27 @@ fn gss_krb5_aprep(ap_req_der: &[u8]) -> Vec<u8> {
 
 /// SPNEGO negTokenInit carrying a Kerberos AP-REQ, for an SMB2 SESSION_SETUP.
 pub fn spnego_krb5_init(ap_req_der: &[u8]) -> Vec<u8> {
-    trace!("[gss] building SPNEGO negTokenInit from AP-REQ ({} bytes)", ap_req_der.len());
+    trace!(
+        "[gss] building SPNEGO negTokenInit from AP-REQ ({} bytes)",
+        ap_req_der.len()
+    );
     let mech_token = gss_krb5_aprep(ap_req_der);
     let mech_types = tlv(0x30, &tlv(0x06, KRB5_OID));
     let mut neg_init = Vec::new();
     neg_init.extend_from_slice(&tlv(0xa0, &mech_types)); // mechTypes [0]
     neg_init.extend_from_slice(&tlv(0xa2, &tlv(0x04, &mech_token))); // mechToken [2]
-    trace!("[gss] negTokenInit body = {} bytes (mechTypes + mechToken)", neg_init.len());
+    trace!(
+        "[gss] negTokenInit body = {} bytes (mechTypes + mechToken)",
+        neg_init.len()
+    );
     let neg_token = tlv(0xa0, &tlv(0x30, &neg_init));
     let mut inner = Vec::new();
     inner.extend_from_slice(&tlv(0x06, SPNEGO_OID));
     inner.extend_from_slice(&neg_token);
     let out = tlv(0x60, &inner);
-    debug!("[gss] SPNEGO token ready: {} bytes for SMB2 SESSION_SETUP", out.len());
+    debug!(
+        "[gss] SPNEGO token ready: {} bytes for SMB2 SESSION_SETUP",
+        out.len()
+    );
     out
 }

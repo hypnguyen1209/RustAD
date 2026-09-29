@@ -54,23 +54,20 @@ const MV_AV_CHANNEL_BINDINGS: u16 = 0x000A;
 /// Domain and Workstation fields are empty; no version block.
 const NTLM_NEGOTIATE: &[u8] = &[
     // Signature
-    0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00,
-    // MessageType = 1
+    0x4e, 0x54, 0x4c, 0x4d, 0x53, 0x53, 0x50, 0x00, // MessageType = 1
     0x01, 0x00, 0x00, 0x00,
     // NegotiateFlags LE 0xa0088207 (no NEGOTIATE_VERSION 0x02000000: without a Version block
     // present, IIS rejects the Type 1 as malformed and never returns a Type 2 challenge).
-    0x07, 0x82, 0x08, 0xa0,
-    // DomainNameFields: empty
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    // WorkstationFields: empty
+    0x07, 0x82, 0x08, 0xa0, // DomainNameFields: empty
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // WorkstationFields: empty
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
 
 // Status string values matching BloodHound CE expected format.
-pub const STATUS_VULNERABLE_HTTP:  &str = "Vulnerable_NtlmHttpEndpoint";
+pub const STATUS_VULNERABLE_HTTP: &str = "Vulnerable_NtlmHttpEndpoint";
 pub const STATUS_VULNERABLE_HTTPS: &str = "Vulnerable_NtlmHttpsEndpointWithoutEpa";
-pub const STATUS_NOT_VULN_EPA:     &str = "NotVulnerable_EpaEnabled";
-pub const STATUS_NOT_VULN_PORT:    &str = "NotVulnerable_PortInaccessible";
+pub const STATUS_NOT_VULN_EPA: &str = "NotVulnerable_EpaEnabled";
+pub const STATUS_NOT_VULN_PORT: &str = "NotVulnerable_PortInaccessible";
 
 // Public types
 
@@ -92,18 +89,18 @@ pub enum WebEnrollmentStatus {
 fn build_http_endpoint(host: &str, vulnerable: bool) -> WebEnrollmentEndpoint {
     WebEnrollmentEndpoint {
         result: Some(WebEnrollmentResult {
-            url:                       format!("http://{}/certsrv/", host),
-            enrollment_type:           "WebEnrollmentApplication".to_string(),
+            url: format!("http://{}/certsrv/", host),
+            enrollment_type: "WebEnrollmentApplication".to_string(),
             status: if vulnerable {
                 STATUS_VULNERABLE_HTTP.to_string()
             } else {
                 STATUS_NOT_VULN_PORT.to_string()
             },
-            adcs_web_enrollment_http:  vulnerable,
+            adcs_web_enrollment_http: vulnerable,
             adcs_web_enrollment_https: false,
-            adcs_web_enrollment_epa:   false,
+            adcs_web_enrollment_epa: false,
         }),
-        collected:      true,
+        collected: true,
         failure_reason: None,
     }
 }
@@ -111,20 +108,20 @@ fn build_http_endpoint(host: &str, vulnerable: bool) -> WebEnrollmentEndpoint {
 /// Build a WebEnrollmentEndpoint from an HTTPS probe result.
 fn build_https_endpoint(host: &str, https_status: &WebEnrollmentStatus) -> WebEnrollmentEndpoint {
     let (status, https, epa) = match https_status {
-        WebEnrollmentStatus::Vulnerable => (STATUS_VULNERABLE_HTTPS.to_string(), true,  false),
-        WebEnrollmentStatus::Protected  => (STATUS_NOT_VULN_EPA.to_string(),     true,  true),
-        WebEnrollmentStatus::NotFound   => (STATUS_NOT_VULN_PORT.to_string(),    false, false),
+        WebEnrollmentStatus::Vulnerable => (STATUS_VULNERABLE_HTTPS.to_string(), true, false),
+        WebEnrollmentStatus::Protected => (STATUS_NOT_VULN_EPA.to_string(), true, true),
+        WebEnrollmentStatus::NotFound => (STATUS_NOT_VULN_PORT.to_string(), false, false),
     };
     WebEnrollmentEndpoint {
         result: Some(WebEnrollmentResult {
-            url:                       format!("https://{}/certsrv/", host),
-            enrollment_type:           "WebEnrollmentApplication".to_string(),
+            url: format!("https://{}/certsrv/", host),
+            enrollment_type: "WebEnrollmentApplication".to_string(),
             status,
-            adcs_web_enrollment_http:  false,
+            adcs_web_enrollment_http: false,
             adcs_web_enrollment_https: https,
-            adcs_web_enrollment_epa:   epa,
+            adcs_web_enrollment_epa: epa,
         }),
-        collected:      true,
+        collected: true,
         failure_reason: None,
     }
 }
@@ -149,15 +146,15 @@ pub struct Esc8Result {
 ///
 /// Returns `None` if the host is completely unreachable on both endpoints.
 pub fn check_esc8(host: &str) -> Option<Esc8Result> {
-    let http  = probe_http(host);
+    let http = probe_http(host);
     let https = probe_https(host);
 
     if http == WebEnrollmentStatus::NotFound && https == WebEnrollmentStatus::NotFound {
         return None;
     }
 
-    let vulnerable = http  == WebEnrollmentStatus::Vulnerable
-        || https == WebEnrollmentStatus::Vulnerable;
+    let vulnerable =
+        http == WebEnrollmentStatus::Vulnerable || https == WebEnrollmentStatus::Vulnerable;
 
     if http == WebEnrollmentStatus::Vulnerable {
         warn!(
@@ -174,7 +171,10 @@ pub fn check_esc8(host: &str) -> Option<Esc8Result> {
         );
     }
     if https == WebEnrollmentStatus::Protected {
-        debug!("ESC8 HTTPS {}: EPA/Channel Binding enforced, protected", host);
+        debug!(
+            "ESC8 HTTPS {}: EPA/Channel Binding enforced, protected",
+            host
+        );
     }
 
     let endpoints = vec![
@@ -226,7 +226,10 @@ fn probe_http(host: &str) -> WebEnrollmentStatus {
             s.starts_with("ntlm") || s.starts_with("negotiate")
         });
 
-    debug!("ESC8 HTTP probe {}: status={} ntlm={}", host, status, has_ntlm);
+    debug!(
+        "ESC8 HTTP probe {}: status={} ntlm={}",
+        host, status, has_ntlm
+    );
 
     if status == 401 && has_ntlm {
         WebEnrollmentStatus::Vulnerable
@@ -244,7 +247,7 @@ fn probe_https(host: &str) -> WebEnrollmentStatus {
     let url = format!("https://{}/certsrv/certfnsh.asp", host);
     debug!("ESC8 HTTPS probe: {}", url);
 
-    let neg_b64    = b64_encode(NTLM_NEGOTIATE);
+    let neg_b64 = b64_encode(NTLM_NEGOTIATE);
     let auth_value = format!("NTLM {}", neg_b64);
 
     let client = match Client::builder()
@@ -257,11 +260,7 @@ fn probe_https(host: &str) -> WebEnrollmentStatus {
         Err(_) => return WebEnrollmentStatus::NotFound,
     };
 
-    let response = match client
-        .get(&url)
-        .header(AUTHORIZATION, &auth_value)
-        .send()
-    {
+    let response = match client.get(&url).header(AUTHORIZATION, &auth_value).send() {
         Ok(r) => r,
         Err(_) => return WebEnrollmentStatus::NotFound,
     };
@@ -301,10 +300,16 @@ fn probe_https(host: &str) -> WebEnrollmentStatus {
         }
         Some(token) => {
             if parse_epa_channel_bindings(&token) {
-                debug!("ESC8 HTTPS {}: MsvAvChannelBindings present: EPA enforced", host);
+                debug!(
+                    "ESC8 HTTPS {}: MsvAvChannelBindings present: EPA enforced",
+                    host
+                );
                 WebEnrollmentStatus::Protected
             } else {
-                debug!("ESC8 HTTPS {}: MsvAvChannelBindings absent: EPA disabled", host);
+                debug!(
+                    "ESC8 HTTPS {}: MsvAvChannelBindings absent: EPA disabled",
+                    host
+                );
                 WebEnrollmentStatus::Vulnerable
             }
         }
@@ -334,7 +339,10 @@ fn probe_https(host: &str) -> WebEnrollmentStatus {
 /// AvPair layout: `AvId u16 | AvLen u16 | AvValue [u8; AvLen]`
 pub fn parse_epa_channel_bindings(token: &[u8]) -> bool {
     if token.len() < 48 {
-        debug!("NTLM token too short ({} bytes), cannot parse as Type 2", token.len());
+        debug!(
+            "NTLM token too short ({} bytes), cannot parse as Type 2",
+            token.len()
+        );
         return false;
     }
 
@@ -359,7 +367,9 @@ pub fn parse_epa_channel_bindings(token: &[u8]) -> bool {
     if token.len() < ti_off.saturating_add(ti_len) {
         debug!(
             "TargetInfo out of bounds (off={}, len={}, token_len={})",
-            ti_off, ti_len, token.len()
+            ti_off,
+            ti_len,
+            token.len()
         );
         return false;
     }
@@ -369,7 +379,7 @@ pub fn parse_epa_channel_bindings(token: &[u8]) -> bool {
 
     let mut i = 0;
     while i + 4 <= avpairs.len() {
-        let av_id  = u16::from_le_bytes([avpairs[i],     avpairs[i + 1]]);
+        let av_id = u16::from_le_bytes([avpairs[i], avpairs[i + 1]]);
         let av_len = u16::from_le_bytes([avpairs[i + 2], avpairs[i + 3]]) as usize;
 
         match av_id {
@@ -446,8 +456,10 @@ mod tests {
 
     #[test]
     fn epa_present_with_non_zero_value() {
-        let cbt = [0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE,
-                   0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let cbt = [
+            0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
+            0x07, 0x08,
+        ];
         let token = build_type2(&avpairs_with_channel_bindings(&cbt));
         assert!(parse_epa_channel_bindings(&token));
     }
@@ -508,8 +520,8 @@ mod tests {
     #[test]
     fn wrong_message_type_returns_false() {
         let mut token = build_type2(&avpairs_without_channel_bindings());
-        token[8]  = 0x01;
-        token[9]  = 0x00;
+        token[8] = 0x01;
+        token[9] = 0x00;
         token[10] = 0x00;
         token[11] = 0x00;
         assert!(!parse_epa_channel_bindings(&token));
@@ -570,7 +582,7 @@ mod tests {
     #[test]
     fn from_http_vulnerable() {
         let ep = build_http_endpoint("ca.corp.local", true);
-        let r  = ep.result.as_ref().unwrap();
+        let r = ep.result.as_ref().unwrap();
         assert_eq!(r.status, STATUS_VULNERABLE_HTTP);
         assert!(r.adcs_web_enrollment_http);
         assert!(!r.adcs_web_enrollment_https);
@@ -582,7 +594,7 @@ mod tests {
     #[test]
     fn from_http_not_found() {
         let ep = build_http_endpoint("ca.corp.local", false);
-        let r  = ep.result.as_ref().unwrap();
+        let r = ep.result.as_ref().unwrap();
         assert_eq!(r.status, STATUS_NOT_VULN_PORT);
         assert!(!r.adcs_web_enrollment_http);
     }
@@ -590,7 +602,7 @@ mod tests {
     #[test]
     fn from_https_vulnerable() {
         let ep = build_https_endpoint("ca.corp.local", &WebEnrollmentStatus::Vulnerable);
-        let r  = ep.result.as_ref().unwrap();
+        let r = ep.result.as_ref().unwrap();
         assert_eq!(r.status, STATUS_VULNERABLE_HTTPS);
         assert!(!r.adcs_web_enrollment_http);
         assert!(r.adcs_web_enrollment_https);
@@ -600,7 +612,7 @@ mod tests {
     #[test]
     fn from_https_protected() {
         let ep = build_https_endpoint("ca.corp.local", &WebEnrollmentStatus::Protected);
-        let r  = ep.result.as_ref().unwrap();
+        let r = ep.result.as_ref().unwrap();
         assert_eq!(r.status, STATUS_NOT_VULN_EPA);
         assert!(r.adcs_web_enrollment_https);
         assert!(r.adcs_web_enrollment_epa);
@@ -609,7 +621,7 @@ mod tests {
     #[test]
     fn from_https_not_found() {
         let ep = build_https_endpoint("ca.corp.local", &WebEnrollmentStatus::NotFound);
-        let r  = ep.result.as_ref().unwrap();
+        let r = ep.result.as_ref().unwrap();
         assert_eq!(r.status, STATUS_NOT_VULN_PORT);
         assert!(!r.adcs_web_enrollment_https);
         assert!(!r.adcs_web_enrollment_epa);

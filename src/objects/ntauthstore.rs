@@ -1,14 +1,14 @@
-use serde_json::value::Value;
-use serde::{Deserialize, Serialize};
 use ldap3::SearchEntry;
 use log::{debug, trace};
+use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::objects::common::{LdapObject, AceTemplate, SPNTarget, Link, Member};
 use crate::enums::{decode_guid_le, parse_ntsecuritydescriptor};
-use crate::utils::date::string_to_epoch;
+use crate::objects::common::{AceTemplate, LdapObject, Link, Member, SPNTarget};
 use crate::utils::crypto::calculate_sha1;
+use crate::utils::date::string_to_epoch;
 
 /// NtAuthStore structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -32,7 +32,9 @@ pub struct NtAuthStore {
 impl NtAuthStore {
     // New NtAuthStore
     pub fn new() -> Self {
-        Self { ..Default::default() }
+        Self {
+            ..Default::default()
+        }
     }
 
     /// Function to parse and replace value in json template for NT Auth Store object.
@@ -122,12 +124,12 @@ impl NtAuthStore {
         if self.object_identifier != "SID" {
             dn_sid.insert(
                 self.properties.distinguishedname.to_string(),
-                self.object_identifier.to_string()
+                self.object_identifier.to_string(),
             );
             // Push DN and Type
             sid_type.insert(
                 self.object_identifier.to_string(),
-                "NtAuthStore".to_string()
+                "NtAuthStore".to_string(),
             );
         }
 
@@ -153,13 +155,21 @@ impl LdapObject for NtAuthStore {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
-    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
+    fn get_links(&self) -> &Vec<Link> {
+        &crate::objects::common::EMPTY_VEC_LINK
+    }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_child_objects(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
     fn get_haslaps(&self) -> &bool {
         &false
     }
@@ -200,16 +210,15 @@ impl LdapObject for NtAuthStore {
     }
 }
 
-
 // NtAuthStore properties structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct NtAuthStoreProperties {
-   domain: String,
-   name: String,
-   distinguishedname: String,
-   domainsid: String,
-   isaclprotected: bool,
-   certthumbprints: Vec<String>,
-   description: Option<String>,
-   whencreated: i64,
+    domain: String,
+    name: String,
+    distinguishedname: String,
+    domainsid: String,
+    isaclprotected: bool,
+    certthumbprints: Vec<String>,
+    description: Option<String>,
+    whencreated: i64,
 }

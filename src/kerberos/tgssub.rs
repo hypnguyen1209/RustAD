@@ -1,6 +1,9 @@
 use std::error::Error;
 
-pub fn substitute_service(ticket_data: &[u8], new_service: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+pub fn substitute_service(
+    ticket_data: &[u8],
+    new_service: &str,
+) -> Result<Vec<u8>, Box<dyn Error>> {
     let parts: Vec<&str> = new_service.split('/').collect();
     let new_sname = encode_principal_name(2, &parts);
 
@@ -184,7 +187,9 @@ fn extract_context_tag_content(data: &[u8], target_tag: u8) -> Option<Vec<u8>> {
         let tag = data[pos];
         pos += 1;
         let len = parse_asn1_length(data, &mut pos).ok()?;
-        if pos + len > data.len() { return None; }
+        if pos + len > data.len() {
+            return None;
+        }
         let ctx = tag & 0x1f;
         if (tag & 0xe0 == 0xa0) && ctx == target_tag {
             return Some(data[pos..pos + len].to_vec());
@@ -216,14 +221,20 @@ fn parse_asn1_length(data: &[u8], pos: &mut usize) -> Result<usize, Box<dyn Erro
 }
 
 fn encode_length(len: usize) -> Vec<u8> {
-    if len < 0x80 { vec![len as u8] }
-    else if len < 0x100 { vec![0x81, len as u8] }
-    else { vec![0x82, (len >> 8) as u8, len as u8] }
+    if len < 0x80 {
+        vec![len as u8]
+    } else if len < 0x100 {
+        vec![0x81, len as u8]
+    } else {
+        vec![0x82, (len >> 8) as u8, len as u8]
+    }
 }
 
 fn encode_sequence_raw(items: &[&[u8]]) -> Vec<u8> {
     let mut c = Vec::new();
-    for i in items { c.extend_from_slice(i); }
+    for i in items {
+        c.extend_from_slice(i);
+    }
     let mut o = vec![0x30];
     o.extend(encode_length(c.len()));
     o.extend(c);

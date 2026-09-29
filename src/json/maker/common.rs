@@ -1,19 +1,19 @@
 use serde::Serialize;
 
 use colored::Colorize;
-use log::{info, debug, trace};
+use log::{debug, info, trace};
 use rayon::prelude::*;
 
+use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::error::Error;
 
 use zip::write::{SimpleFileOptions, ZipWriter};
 
 extern crate zip;
 use crate::args::{Options, RUSTHOUND_VERSION};
-use crate::objects::common::{Meta, LdapObject};
+use crate::objects::common::{LdapObject, Meta};
 
 /// Current Bloodhound version 4.3+
 pub const BLOODHOUND_VERSION_4: i8 = 6;
@@ -28,8 +28,16 @@ const SERIALIZE_BATCH: usize = 4096;
 /// Where a JSON collection is written: either straight into an entry of the
 /// shared zip archive, or into its own `.json` file on disk.
 enum Sink<'a> {
-    Zip { writer: &'a mut ZipWriter<BufWriter<File>>, datetime: &'a str, domain: &'a str },
-    Dir { path: &'a str, datetime: &'a str, domain: &'a str },
+    Zip {
+        writer: &'a mut ZipWriter<BufWriter<File>>,
+        datetime: &'a str,
+        domain: &'a str,
+    },
+    Dir {
+        path: &'a str,
+        datetime: &'a str,
+        domain: &'a str,
+    },
 }
 
 /// Stream one object collection as a BloodHound JSON document
@@ -92,7 +100,11 @@ where
     debug!("Making {name}.json");
 
     match sink {
-        Sink::Zip { writer, datetime, domain } => {
+        Sink::Zip {
+            writer,
+            datetime,
+            domain,
+        } => {
             // `large_file(true)` enables ZIP64, which is required for any entry
             // larger than 4 GiB. Without it the zip crate errors out on huge
             // domains, which is what caused the crash on large outputs.
@@ -105,7 +117,11 @@ where
             writer.start_file(&filename, options)?;
             write_json_document(*writer, name, vec_json)?;
         }
-        Sink::Dir { path, datetime, domain } => {
+        Sink::Dir {
+            path,
+            datetime,
+            domain,
+        } => {
             let final_path = format!("{path}/{datetime}_{domain}_{name}.json");
             let file = File::create(&final_path)?;
             let mut buf = BufWriter::new(file);
@@ -172,7 +188,11 @@ pub fn make_a_zip(
 
     trace!("Making the ZIP file");
     {
-        let mut sink = Sink::Zip { writer: &mut writer, datetime, domain };
+        let mut sink = Sink::Zip {
+            writer: &mut writer,
+            datetime,
+            domain,
+        };
         emit_all!(&mut sink, ad_results);
     }
     writer.finish()?.flush()?;

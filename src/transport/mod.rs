@@ -10,9 +10,9 @@
 //!   cifs/<host> service ticket and builds the AP-REQ for SMB Kerberos auth.
 //! * `cert`: rustls client config carrying a client certificate (PFX/PEM) for
 //!   certificate authentication over LDAPS.
-//! 
-pub mod ldap;
-pub mod smb;
+//!
+pub mod cert;
 pub mod gss;
 pub mod kerberos;
-pub mod cert;
+pub mod ldap;
+pub mod smb;

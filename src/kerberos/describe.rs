@@ -96,8 +96,8 @@ fn parse_krb_cred(data: &[u8]) -> Result<TicketInfo, Box<dyn Error>> {
         // First ticket in the sequence
         if !tickets_inner.is_empty() {
             let ticket_data = &tickets_inner;
-            let ticket_inner = unwrap_application(ticket_data)
-                .unwrap_or_else(|_| ticket_data.to_vec());
+            let ticket_inner =
+                unwrap_application(ticket_data).unwrap_or_else(|_| ticket_data.to_vec());
 
             if let Some(realm_raw) = extract_context_tag_content(&ticket_inner, 1) {
                 info.realm = extract_first_string(&realm_raw).unwrap_or_default();
@@ -156,16 +156,28 @@ pub fn print_ticket_info(info: &TicketInfo) {
         println!("  Service     : {}", info.sname.join("/"));
     }
     if info.ticket_enc_type != 0 {
-        println!("  Ticket EType: {} ({})", info.ticket_enc_type, etype_name(info.ticket_enc_type));
+        println!(
+            "  Ticket EType: {} ({})",
+            info.ticket_enc_type,
+            etype_name(info.ticket_enc_type)
+        );
     }
     if info.enc_type != 0 && info.enc_type != info.ticket_enc_type {
-        println!("  EncPart Type: {} ({})", info.enc_type, etype_name(info.enc_type));
+        println!(
+            "  EncPart Type: {} ({})",
+            info.enc_type,
+            etype_name(info.enc_type)
+        );
     }
     if let Some(kvno) = info.key_version {
         println!("  Key Version : {}", kvno);
     }
     if info.flags != 0 {
-        println!("  Flags       : 0x{:08x} ({})", info.flags, decode_flags(info.flags));
+        println!(
+            "  Flags       : 0x{:08x} ({})",
+            info.flags,
+            decode_flags(info.flags)
+        );
     }
     if let Some(ref t) = info.start_time {
         println!("  Start Time  : {}", t);
@@ -194,19 +206,45 @@ fn etype_name(e: i32) -> &'static str {
 
 fn decode_flags(f: u32) -> String {
     let mut flags = Vec::new();
-    if f & 0x40000000 != 0 { flags.push("forwardable"); }
-    if f & 0x20000000 != 0 { flags.push("forwarded"); }
-    if f & 0x10000000 != 0 { flags.push("proxiable"); }
-    if f & 0x08000000 != 0 { flags.push("proxy"); }
-    if f & 0x04000000 != 0 { flags.push("may-postdate"); }
-    if f & 0x02000000 != 0 { flags.push("postdated"); }
-    if f & 0x01000000 != 0 { flags.push("invalid"); }
-    if f & 0x00800000 != 0 { flags.push("renewable"); }
-    if f & 0x00400000 != 0 { flags.push("initial"); }
-    if f & 0x00200000 != 0 { flags.push("pre-authent"); }
-    if f & 0x00100000 != 0 { flags.push("hw-authent"); }
-    if f & 0x00080000 != 0 { flags.push("ok-as-delegate"); }
-    if f & 0x00010000 != 0 { flags.push("enc-pa-rep"); }
+    if f & 0x40000000 != 0 {
+        flags.push("forwardable");
+    }
+    if f & 0x20000000 != 0 {
+        flags.push("forwarded");
+    }
+    if f & 0x10000000 != 0 {
+        flags.push("proxiable");
+    }
+    if f & 0x08000000 != 0 {
+        flags.push("proxy");
+    }
+    if f & 0x04000000 != 0 {
+        flags.push("may-postdate");
+    }
+    if f & 0x02000000 != 0 {
+        flags.push("postdated");
+    }
+    if f & 0x01000000 != 0 {
+        flags.push("invalid");
+    }
+    if f & 0x00800000 != 0 {
+        flags.push("renewable");
+    }
+    if f & 0x00400000 != 0 {
+        flags.push("initial");
+    }
+    if f & 0x00200000 != 0 {
+        flags.push("pre-authent");
+    }
+    if f & 0x00100000 != 0 {
+        flags.push("hw-authent");
+    }
+    if f & 0x00080000 != 0 {
+        flags.push("ok-as-delegate");
+    }
+    if f & 0x00010000 != 0 {
+        flags.push("enc-pa-rep");
+    }
     if flags.is_empty() {
         "none".to_string()
     } else {
@@ -255,7 +293,9 @@ fn unwrap_sequence_bytes(data: &[u8]) -> Vec<u8> {
 fn extract_context_tag_content(data: &[u8], target_tag: u8) -> Option<Vec<u8>> {
     let mut pos = 0;
     while pos < data.len() {
-        if pos >= data.len() { break; }
+        if pos >= data.len() {
+            break;
+        }
         let tag = data[pos];
         pos += 1;
         let len = parse_asn1_length(data, &mut pos).ok()?;
@@ -302,7 +342,9 @@ fn extract_principal_names(data: &[u8]) -> Vec<String> {
             Ok(l) => l,
             Err(_) => break,
         };
-        if pos + len > names_inner.len() { break; }
+        if pos + len > names_inner.len() {
+            break;
+        }
         if matches!(tag, 0x1b | 0x0c | 0x16 | 0x13) {
             result.push(String::from_utf8_lossy(&names_inner[pos..pos + len]).to_string());
         }
@@ -316,8 +358,7 @@ fn parse_encrypted_data_fields(data: &[u8]) -> (i32, Option<u32>, Vec<u8>) {
     let etype = extract_context_tag_content(&inner, 0)
         .map(|r| parse_integer_signed(&r))
         .unwrap_or(0);
-    let kvno = extract_context_tag_content(&inner, 1)
-        .map(|r| parse_integer_unsigned(&r));
+    let kvno = extract_context_tag_content(&inner, 1).map(|r| parse_integer_unsigned(&r));
     let cipher = extract_context_tag_content(&inner, 2).unwrap_or_default();
     let cipher_bytes = unwrap_octet_string(&cipher);
     (etype, kvno, cipher_bytes)
@@ -346,11 +387,19 @@ fn parse_integer_signed(data: &[u8]) -> i32 {
             Ok(l) => l,
             Err(_) => return 0,
         };
-        if pos + len <= data.len() { &data[pos..pos + len] } else { return 0; }
+        if pos + len <= data.len() {
+            &data[pos..pos + len]
+        } else {
+            return 0;
+        }
     } else {
         data
     };
-    let mut val: i32 = if !bytes.is_empty() && bytes[0] & 0x80 != 0 { -1 } else { 0 };
+    let mut val: i32 = if !bytes.is_empty() && bytes[0] & 0x80 != 0 {
+        -1
+    } else {
+        0
+    };
     for &b in bytes {
         val = (val << 8) | b as i32;
     }
@@ -364,7 +413,11 @@ fn parse_integer_unsigned(data: &[u8]) -> u32 {
             Ok(l) => l,
             Err(_) => return 0,
         };
-        if pos + len <= data.len() { &data[pos..pos + len] } else { return 0; }
+        if pos + len <= data.len() {
+            &data[pos..pos + len]
+        } else {
+            return 0;
+        }
     } else {
         data
     };

@@ -1,9 +1,9 @@
-use std::error::Error;
-use hmac::{Hmac, Mac};
-use tokio::net::TcpStream;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::kerberos::asktgs::{ask_tgs, AskTgsParams};
 use crate::kerberos::crypto::ETYPE_RC4_HMAC;
+use hmac::{Hmac, Mac};
+use std::error::Error;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 type HmacMd5 = Hmac<md5::Md5>;
 
@@ -37,18 +37,18 @@ pub async fn change_password(params: &ChangePwParams) -> Result<(), Box<dyn Erro
         session_etype: params.session_etype,
         target_etype: Some(ETYPE_RC4_HMAC),
         enterprise: false,
-    }).await?;
+    })
+    .await?;
 
-    log::info!("Got kadmin/changepw service ticket ({} bytes)", tgs_result.service_ticket.len());
+    log::info!(
+        "Got kadmin/changepw service ticket ({} bytes)",
+        tgs_result.service_ticket.len()
+    );
 
     // Step 2: Build ChangePasswdData or SetPasswdData
     let passwd_data = if let Some(ref target) = params.target_user {
         // Set password for another user (requires admin privileges)
-        build_set_passwd_data(
-            &params.new_password,
-            target,
-            &realm,
-        )
+        build_set_passwd_data(&params.new_password, target, &realm)
     } else {
         // Change own password
         params.new_password.as_bytes().to_vec()
@@ -86,18 +86,19 @@ pub async fn change_password(params: &ChangePwParams) -> Result<(), Box<dyn Erro
 
     let mut packet = Vec::with_capacity(total_len as usize);
     // For TCP, prepend 4-byte length
-    packet.extend_from_slice(&total_len.to_be_bytes());    // message length
-    packet.extend_from_slice(&version.to_be_bytes());       // version
-    packet.extend_from_slice(&ap_req_len.to_be_bytes());   // AP-REQ length
-    packet.extend_from_slice(&ap_req);                      // AP-REQ
-    packet.extend_from_slice(&krb_priv);                    // KRB-PRIV
+    packet.extend_from_slice(&total_len.to_be_bytes()); // message length
+    packet.extend_from_slice(&version.to_be_bytes()); // version
+    packet.extend_from_slice(&ap_req_len.to_be_bytes()); // AP-REQ length
+    packet.extend_from_slice(&ap_req); // AP-REQ
+    packet.extend_from_slice(&krb_priv); // KRB-PRIV
 
     // Step 7: Send to kpasswd service (port 464) via TCP
     let addr = format!("{}:{}", params.dc, KPASSWD_PORT);
     let mut stream = tokio::time::timeout(
         std::time::Duration::from_secs(10),
         TcpStream::connect(&addr),
-    ).await??;
+    )
+    .await??;
 
     // TCP framing: 4-byte length prefix
     let tcp_len = (packet.len() as u32).to_be_bytes();
@@ -126,7 +127,12 @@ pub async fn change_password(params: &ChangePwParams) -> Result<(), Box<dyn Erro
     let resp_version = u16::from_be_bytes([resp[2], resp[3]]);
     let resp_ap_rep_len = u16::from_be_bytes([resp[4], resp[5]]) as usize;
 
-    log::debug!("kpasswd response: len={} ver={} ap_rep_len={}", resp_msg_len, resp_version, resp_ap_rep_len);
+    log::debug!(
+        "kpasswd response: len={} ver={} ap_rep_len={}",
+        resp_msg_len,
+        resp_version,
+        resp_ap_rep_len
+    );
 
     // After the AP-REP comes KRB-PRIV with the result code
     let result_offset = 6 + resp_ap_rep_len;
@@ -276,47 +282,69 @@ fn rc4_transform(key: &[u8], data: &[u8]) -> Vec<u8> {
     }
     let mut i: u8 = 0;
     let mut j: u8 = 0;
-    data.iter().map(|&byte| {
-        i = i.wrapping_add(1);
-        j = j.wrapping_add(s[i as usize]);
-        s.swap(i as usize, j as usize);
-        byte ^ s[s[i as usize].wrapping_add(s[j as usize]) as usize]
-    }).collect()
+    data.iter()
+        .map(|&byte| {
+            i = i.wrapping_add(1);
+            j = j.wrapping_add(s[i as usize]);
+            s.swap(i as usize, j as usize);
+            byte ^ s[s[i as usize].wrapping_add(s[j as usize]) as usize]
+        })
+        .collect()
 }
 
 // ASN.1 DER encoding helpers
 
 fn encode_length(len: usize) -> Vec<u8> {
-    if len < 0x80 { vec![len as u8] }
-    else if len < 0x100 { vec![0x81, len as u8] }
-    else { vec![0x82, (len >> 8) as u8, len as u8] }
+    if len < 0x80 {
+        vec![len as u8]
+    } else if len < 0x100 {
+        vec![0x81, len as u8]
+    } else {
+        vec![0x82, (len >> 8) as u8, len as u8]
+    }
 }
 
 fn encode_sequence(items: &[&[u8]]) -> Vec<u8> {
     let mut c = Vec::new();
-    for i in items { c.extend_from_slice(i); }
-    let mut o = vec![0x30]; o.extend(encode_length(c.len())); o.extend(c); o
+    for i in items {
+        c.extend_from_slice(i);
+    }
+    let mut o = vec![0x30];
+    o.extend(encode_length(c.len()));
+    o.extend(c);
+    o
 }
 
 fn encode_context_tag(tag: u8, content: &[u8]) -> Vec<u8> {
-    let mut o = vec![0xa0 | tag]; o.extend(encode_length(content.len())); o.extend(content); o
+    let mut o = vec![0xa0 | tag];
+    o.extend(encode_length(content.len()));
+    o.extend(content);
+    o
 }
 
 fn encode_application_tag(tag: u8, content: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x60 | tag]; o.extend(encode_length(content.len())); o.extend(content); o
+    let mut o = vec![0x60 | tag];
+    o.extend(encode_length(content.len()));
+    o.extend(content);
+    o
 }
 
 fn encode_integer(val: i32) -> Vec<u8> {
     let mut o = vec![0x02];
-    if val >= 0 && val < 128 { o.extend(encode_length(1)); o.push(val as u8); }
-    else {
+    if val >= 0 && val < 128 {
+        o.extend(encode_length(1));
+        o.push(val as u8);
+    } else {
         let b = val.to_be_bytes();
         let s = b.iter().position(|&x| x != 0).unwrap_or(3);
         let slice = &b[s..];
         if !slice.is_empty() && slice[0] & 0x80 != 0 && val >= 0 {
-            o.extend(encode_length(slice.len() + 1)); o.push(0); o.extend(slice);
+            o.extend(encode_length(slice.len() + 1));
+            o.push(0);
+            o.extend(slice);
         } else {
-            o.extend(encode_length(slice.len())); o.extend(slice);
+            o.extend(encode_length(slice.len()));
+            o.extend(slice);
         }
     }
     o
@@ -328,33 +356,51 @@ fn encode_integer_u32(val: u32) -> Vec<u8> {
     let s = b.iter().position(|&x| x != 0).unwrap_or(3);
     let t = &b[s..];
     if t.is_empty() || t[0] & 0x80 != 0 {
-        o.extend(encode_length(t.len() + 1)); o.push(0); o.extend(t);
+        o.extend(encode_length(t.len() + 1));
+        o.push(0);
+        o.extend(t);
     } else {
-        o.extend(encode_length(t.len())); o.extend(t);
+        o.extend(encode_length(t.len()));
+        o.extend(t);
     }
     o
 }
 
 fn encode_general_string(s: &str) -> Vec<u8> {
-    let mut o = vec![0x1b]; o.extend(encode_length(s.len())); o.extend(s.as_bytes()); o
+    let mut o = vec![0x1b];
+    o.extend(encode_length(s.len()));
+    o.extend(s.as_bytes());
+    o
 }
 
 fn encode_generalized_time(t: &str) -> Vec<u8> {
-    let mut o = vec![0x18]; o.extend(encode_length(t.len())); o.extend(t.as_bytes()); o
+    let mut o = vec![0x18];
+    o.extend(encode_length(t.len()));
+    o.extend(t.as_bytes());
+    o
 }
 
 fn encode_octet_string(data: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x04]; o.extend(encode_length(data.len())); o.extend(data); o
+    let mut o = vec![0x04];
+    o.extend(encode_length(data.len()));
+    o.extend(data);
+    o
 }
 
 fn encode_bitstring(data: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x03]; o.extend(encode_length(data.len() + 1)); o.push(0); o.extend(data); o
+    let mut o = vec![0x03];
+    o.extend(encode_length(data.len() + 1));
+    o.push(0);
+    o.extend(data);
+    o
 }
 
 fn encode_principal_name(name_type: i32, names: &[&str]) -> Vec<u8> {
     let nt = encode_integer(name_type);
     let mut ns = Vec::new();
-    for n in names { ns.extend(encode_general_string(n)); }
+    for n in names {
+        ns.extend(encode_general_string(n));
+    }
     let nseq = encode_sequence(&[&ns]);
     let mut c = Vec::new();
     c.extend(encode_context_tag(0, &nt));
@@ -363,12 +409,22 @@ fn encode_principal_name(name_type: i32, names: &[&str]) -> Vec<u8> {
 }
 
 fn parse_length(data: &[u8], pos: &mut usize) -> Result<usize, Box<dyn Error>> {
-    if *pos >= data.len() { return Err("unexpected end".into()); }
-    let first = data[*pos]; *pos += 1;
-    if first < 0x80 { return Ok(first as usize); }
+    if *pos >= data.len() {
+        return Err("unexpected end".into());
+    }
+    let first = data[*pos];
+    *pos += 1;
+    if first < 0x80 {
+        return Ok(first as usize);
+    }
     let n = (first & 0x7f) as usize;
-    if n > 4 || *pos + n > data.len() { return Err("invalid length".into()); }
+    if n > 4 || *pos + n > data.len() {
+        return Err("invalid length".into());
+    }
     let mut len = 0usize;
-    for _ in 0..n { len = (len << 8) | data[*pos] as usize; *pos += 1; }
+    for _ in 0..n {
+        len = (len << 8) | data[*pos] as usize;
+        *pos += 1;
+    }
     Ok(len)
 }

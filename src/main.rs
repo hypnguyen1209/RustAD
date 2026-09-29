@@ -4,7 +4,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use env_logger::Builder;
 use log::{error, info, trace};
 
-use rustad::{args, banner, transport::ldap::ldap_auth, api::run_collection};
+use rustad::{api::run_collection, args, banner, transport::ldap::ldap_auth};
 use std::error::Error;
 
 #[cfg(feature = "noargs")]
@@ -51,7 +51,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         while start.elapsed() < duration {
             tokio::time::sleep(interval).await;
             iteration += 1;
-            info!("Session loop iteration #{} ({:.0}s elapsed)", iteration, start.elapsed().as_secs_f64());
+            info!(
+                "Session loop iteration #{} ({:.0}s elapsed)",
+                iteration,
+                start.elapsed().as_secs_f64()
+            );
             match run_collection(&mut ldap, &common_args).await {
                 Ok(out) => trace!("Loop #{iteration} output: {out}"),
                 Err(err) => error!("Loop #{iteration} failed: {err}"),

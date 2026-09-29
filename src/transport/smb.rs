@@ -28,7 +28,10 @@ pub enum SmbAuth<'a> {
     Hash(&'a [u8; 16]),
     /// Pass-the-ticket: SPNEGO AP-REQ blob + 16 byte SMB session key
     /// already built for this host's cifs/<host> SPN.
-    Kerberos { gss_blob: &'a [u8], session_key: &'a [u8; 16] },
+    Kerberos {
+        gss_blob: &'a [u8],
+        session_key: &'a [u8; 16],
+    },
 }
 
 /// UNC of the IPC$ share (MS RPC pipes).
@@ -77,12 +80,17 @@ pub async fn connect_authenticated(
                 anyhow::anyhow!("auth: {e}")
             })?;
         }
-        SmbAuth::Kerberos { gss_blob, session_key } => {
+        SmbAuth::Kerberos {
+            gss_blob,
+            session_key,
+        } => {
             trace!("[{host}] SMB SESSION_SETUP with Kerberos (pass the ticket)");
-            smb.login_kerberos(gss_blob, session_key).await.map_err(|e| {
-                error!("[{host}] SMB Kerberos auth failed: {e}");
-                anyhow::anyhow!("auth(krb): {e}")
-            })?;
+            smb.login_kerberos(gss_blob, session_key)
+                .await
+                .map_err(|e| {
+                    error!("[{host}] SMB Kerberos auth failed: {e}");
+                    anyhow::anyhow!("auth(krb): {e}")
+                })?;
         }
     }
     debug!("[{host}] SMB authenticated as {domain}\\{user}");
@@ -156,7 +164,11 @@ pub async fn open_rpc_pipe(
 ///
 /// `path` is relative to the share root ("" for the root). Excludes "." and
 /// "..". Tree-connect the share first (see `connect_sysvol`).
-pub async fn list_dir(smb: &mut SmbClient, host: &str, path: &str) -> anyhow::Result<Vec<DirEntry>> {
+pub async fn list_dir(
+    smb: &mut SmbClient,
+    host: &str,
+    path: &str,
+) -> anyhow::Result<Vec<DirEntry>> {
     let shown = if path.is_empty() { r"\" } else { path };
     trace!("[{host}] SMB list dir {shown}");
     smb.list_directory(path).await.map_err(|e| {

@@ -1,6 +1,6 @@
-use std::error::Error;
+use crate::kerberos::crypto::{ETYPE_AES256_CTS_HMAC_SHA1, ETYPE_RC4_HMAC};
 use hmac::{Hmac, Mac};
-use crate::kerberos::crypto::{ETYPE_RC4_HMAC, ETYPE_AES256_CTS_HMAC_SHA1};
+use std::error::Error;
 
 type HmacMd5 = Hmac<md5::Md5>;
 
@@ -100,18 +100,22 @@ fn build_authenticator(username: &str, realm: &str, time: &str, nonce: u32) -> V
     // }
     let cname = encode_principal_name(1, &[username]);
     let mut content = Vec::new();
-    content.extend(encode_context_tag(0, &encode_integer(5)));                  // authenticator-vno
-    content.extend(encode_context_tag(1, &encode_general_string(realm)));       // crealm
-    content.extend(encode_context_tag(2, &cname));                              // cname
-    content.extend(encode_context_tag(4, &encode_integer(0)));                  // cusec
-    content.extend(encode_context_tag(5, &encode_generalized_time(time)));      // ctime
-    content.extend(encode_context_tag(7, &encode_integer_u32(nonce)));          // seq-number
+    content.extend(encode_context_tag(0, &encode_integer(5))); // authenticator-vno
+    content.extend(encode_context_tag(1, &encode_general_string(realm))); // crealm
+    content.extend(encode_context_tag(2, &cname)); // cname
+    content.extend(encode_context_tag(4, &encode_integer(0))); // cusec
+    content.extend(encode_context_tag(5, &encode_generalized_time(time))); // ctime
+    content.extend(encode_context_tag(7, &encode_integer_u32(nonce))); // seq-number
 
     let seq = encode_sequence(&[&content]);
     encode_application_tag(2, &seq)
 }
 
-fn rc4_encrypt_for_tgs(key: &[u8], plaintext: &[u8], usage: i32) -> Result<Vec<u8>, Box<dyn Error>> {
+fn rc4_encrypt_for_tgs(
+    key: &[u8],
+    plaintext: &[u8],
+    usage: i32,
+) -> Result<Vec<u8>, Box<dyn Error>> {
     // RC4-HMAC encryption per RFC 4757:
     // K1 = HMAC-MD5(key, usage_le_bytes)
     // K3 = HMAC-MD5(K1, random_confounder + plaintext)
@@ -178,11 +182,11 @@ fn build_ap_req(ticket_der: &[u8], encrypted_auth: &[u8], auth_etype: i32) -> Ve
     let ap_options = encode_bitstring(&[0, 0, 0, 0]); // no flags
 
     let mut content = Vec::new();
-    content.extend(encode_context_tag(0, &encode_integer(5)));        // pvno
-    content.extend(encode_context_tag(1, &encode_integer(14)));       // msg-type
-    content.extend(encode_context_tag(2, &ap_options));               // ap-options
-    content.extend(encode_context_tag(3, ticket_der));                // ticket (already DER)
-    content.extend(encode_context_tag(4, &enc_data));                 // authenticator
+    content.extend(encode_context_tag(0, &encode_integer(5))); // pvno
+    content.extend(encode_context_tag(1, &encode_integer(14))); // msg-type
+    content.extend(encode_context_tag(2, &ap_options)); // ap-options
+    content.extend(encode_context_tag(3, ticket_der)); // ticket (already DER)
+    content.extend(encode_context_tag(4, &enc_data)); // authenticator
 
     let seq = encode_sequence(&[&content]);
     encode_application_tag(14, &seq)
@@ -214,7 +218,13 @@ fn build_padata(pa_type: i32, pa_value: &[u8]) -> Vec<u8> {
     encode_sequence(&[&content])
 }
 
-fn build_tgs_req_body(realm: &str, sname_type: i32, sname_parts: &[&str], nonce: u32, etype: i32) -> Vec<u8> {
+fn build_tgs_req_body(
+    realm: &str,
+    sname_type: i32,
+    sname_parts: &[&str],
+    nonce: u32,
+    etype: i32,
+) -> Vec<u8> {
     let sname = encode_principal_name(sname_type, sname_parts);
     let realm_enc = encode_general_string(realm);
     let till = encode_generalized_time("20370913024805Z");
@@ -236,11 +246,11 @@ fn build_tgs_req_body(realm: &str, sname_type: i32, sname_parts: &[&str], nonce:
 
     let mut body = Vec::new();
     body.extend(encode_context_tag(0, &kdc_options));
-    body.extend(encode_context_tag(2, &realm_enc));         // realm
-    body.extend(encode_context_tag(3, &sname));             // sname
-    body.extend(encode_context_tag(5, &till));              // till
-    body.extend(encode_context_tag(7, &nonce_enc));         // nonce
-    body.extend(encode_context_tag(8, &etypes));            // etype
+    body.extend(encode_context_tag(2, &realm_enc)); // realm
+    body.extend(encode_context_tag(3, &sname)); // sname
+    body.extend(encode_context_tag(5, &till)); // till
+    body.extend(encode_context_tag(7, &nonce_enc)); // nonce
+    body.extend(encode_context_tag(8, &etypes)); // etype
 
     encode_sequence(&[&body])
 }
@@ -256,10 +266,10 @@ fn build_tgs_req(pa_tgs_req: &[u8], req_body: &[u8]) -> Vec<u8> {
     let padata_seq = encode_sequence(&[pa_tgs_req]);
 
     let mut content = Vec::new();
-    content.extend(encode_context_tag(1, &encode_integer(5)));     // pvno
-    content.extend(encode_context_tag(2, &encode_integer(12)));    // msg-type = TGS-REQ
-    content.extend(encode_context_tag(3, &padata_seq));            // padata
-    content.extend(encode_context_tag(4, req_body));               // req-body
+    content.extend(encode_context_tag(1, &encode_integer(5))); // pvno
+    content.extend(encode_context_tag(2, &encode_integer(12))); // msg-type = TGS-REQ
+    content.extend(encode_context_tag(3, &padata_seq)); // padata
+    content.extend(encode_context_tag(4, req_body)); // req-body
 
     let seq = encode_sequence(&[&content]);
     encode_application_tag(12, &seq)
@@ -310,8 +320,8 @@ fn extract_enc_part_from_rep(data: &[u8]) -> Result<(i32, Vec<u8>), Box<dyn Erro
         let enc_data_bytes = &data[p..p + outer_len.min(data.len() - p)];
 
         let etype = extract_integer_from_context(enc_data_bytes, 0).unwrap_or(ETYPE_RC4_HMAC);
-        let cipher = extract_octet_from_context(enc_data_bytes, 2)
-            .ok_or("No cipher in enc-part")?;
+        let cipher =
+            extract_octet_from_context(enc_data_bytes, 2).ok_or("No cipher in enc-part")?;
 
         return Ok((etype, cipher));
     }
@@ -411,8 +421,8 @@ fn extract_krb_error_code(data: &[u8]) -> Option<u32> {
 
 fn krb_error_string(code: Option<u32>) -> String {
     match code {
-        Some(6)  => "KDC_ERR_C_PRINCIPAL_UNKNOWN".into(),
-        Some(7)  => "KDC_ERR_S_PRINCIPAL_UNKNOWN".into(),
+        Some(6) => "KDC_ERR_C_PRINCIPAL_UNKNOWN".into(),
+        Some(7) => "KDC_ERR_S_PRINCIPAL_UNKNOWN".into(),
         Some(12) => "KDC_ERR_POLICY".into(),
         Some(13) => "KDC_ERR_BADOPTION".into(),
         Some(14) => "KDC_ERR_ETYPE_NOSUPP".into(),
@@ -424,55 +434,85 @@ fn krb_error_string(code: Option<u32>) -> String {
         Some(32) => "KRB_AP_ERR_BADADDR".into(),
         Some(37) => "KRB_AP_ERR_SKEW".into(),
         Some(41) => "KRB_AP_ERR_REPEAT".into(),
-        Some(c)  => format!("KRB_ERROR({})", c),
-        None     => "UNKNOWN_KRB_ERROR".into(),
+        Some(c) => format!("KRB_ERROR({})", c),
+        None => "UNKNOWN_KRB_ERROR".into(),
     }
 }
 
 // ─── ASN.1 DER encoding helpers ──────────────────────────────────────
 
 fn parse_asn1_length(data: &[u8], pos: &mut usize) -> Result<usize, Box<dyn Error>> {
-    if *pos >= data.len() { return Err("unexpected end".into()); }
-    let first = data[*pos]; *pos += 1;
-    if first < 0x80 { return Ok(first as usize); }
+    if *pos >= data.len() {
+        return Err("unexpected end".into());
+    }
+    let first = data[*pos];
+    *pos += 1;
+    if first < 0x80 {
+        return Ok(first as usize);
+    }
     let n = (first & 0x7f) as usize;
-    if n > 4 || *pos + n > data.len() { return Err("invalid length".into()); }
+    if n > 4 || *pos + n > data.len() {
+        return Err("invalid length".into());
+    }
     let mut len = 0usize;
-    for _ in 0..n { len = (len << 8) | data[*pos] as usize; *pos += 1; }
+    for _ in 0..n {
+        len = (len << 8) | data[*pos] as usize;
+        *pos += 1;
+    }
     Ok(len)
 }
 
 fn encode_length(len: usize) -> Vec<u8> {
-    if len < 0x80 { vec![len as u8] }
-    else if len < 0x100 { vec![0x81, len as u8] }
-    else { vec![0x82, (len >> 8) as u8, len as u8] }
+    if len < 0x80 {
+        vec![len as u8]
+    } else if len < 0x100 {
+        vec![0x81, len as u8]
+    } else {
+        vec![0x82, (len >> 8) as u8, len as u8]
+    }
 }
 
 fn encode_sequence(items: &[&[u8]]) -> Vec<u8> {
     let mut c = Vec::new();
-    for i in items { c.extend_from_slice(i); }
-    let mut o = vec![0x30]; o.extend(encode_length(c.len())); o.extend(c); o
+    for i in items {
+        c.extend_from_slice(i);
+    }
+    let mut o = vec![0x30];
+    o.extend(encode_length(c.len()));
+    o.extend(c);
+    o
 }
 
 fn encode_context_tag(tag: u8, content: &[u8]) -> Vec<u8> {
-    let mut o = vec![0xa0 | tag]; o.extend(encode_length(content.len())); o.extend(content); o
+    let mut o = vec![0xa0 | tag];
+    o.extend(encode_length(content.len()));
+    o.extend(content);
+    o
 }
 
 fn encode_application_tag(tag: u8, content: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x60 | tag]; o.extend(encode_length(content.len())); o.extend(content); o
+    let mut o = vec![0x60 | tag];
+    o.extend(encode_length(content.len()));
+    o.extend(content);
+    o
 }
 
 fn encode_integer(val: i32) -> Vec<u8> {
     let mut o = vec![0x02];
-    if val >= 0 && val < 128 { o.extend(encode_length(1)); o.push(val as u8); }
-    else {
+    if val >= 0 && val < 128 {
+        o.extend(encode_length(1));
+        o.push(val as u8);
+    } else {
         let b = val.to_be_bytes();
         let s = b.iter().position(|&x| x != 0).unwrap_or(3);
         let slice = &b[s..];
         if !slice.is_empty() && slice[0] & 0x80 != 0 {
-            o.extend(encode_length(slice.len() + 1)); o.push(0); o.extend(slice);
+            o.extend(encode_length(slice.len() + 1));
+            o.push(0);
+            o.extend(slice);
         } else {
-            o.extend(encode_length(slice.len())); o.extend(slice);
+            o.extend(encode_length(slice.len()));
+            o.extend(slice);
         }
     }
     o
@@ -484,37 +524,54 @@ fn encode_integer_u32(val: u32) -> Vec<u8> {
     let s = b.iter().position(|&x| x != 0).unwrap_or(3);
     let t = &b[s..];
     if t.is_empty() || t[0] & 0x80 != 0 {
-        o.extend(encode_length(t.len() + 1)); o.push(0); o.extend(t);
+        o.extend(encode_length(t.len() + 1));
+        o.push(0);
+        o.extend(t);
     } else {
-        o.extend(encode_length(t.len())); o.extend(t);
+        o.extend(encode_length(t.len()));
+        o.extend(t);
     }
     o
 }
 
 fn encode_general_string(s: &str) -> Vec<u8> {
-    let mut o = vec![0x1b]; o.extend(encode_length(s.len())); o.extend(s.as_bytes()); o
+    let mut o = vec![0x1b];
+    o.extend(encode_length(s.len()));
+    o.extend(s.as_bytes());
+    o
 }
 
 fn encode_generalized_time(t: &str) -> Vec<u8> {
-    let mut o = vec![0x18]; o.extend(encode_length(t.len())); o.extend(t.as_bytes()); o
+    let mut o = vec![0x18];
+    o.extend(encode_length(t.len()));
+    o.extend(t.as_bytes());
+    o
 }
 
 fn encode_bitstring(data: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x03]; o.extend(encode_length(data.len() + 1)); o.push(0); o.extend(data); o
+    let mut o = vec![0x03];
+    o.extend(encode_length(data.len() + 1));
+    o.push(0);
+    o.extend(data);
+    o
 }
 
 fn encode_octet_string(data: &[u8]) -> Vec<u8> {
-    let mut o = vec![0x04]; o.extend(encode_length(data.len())); o.extend(data); o
+    let mut o = vec![0x04];
+    o.extend(encode_length(data.len()));
+    o.extend(data);
+    o
 }
 
 fn encode_principal_name(name_type: i32, names: &[&str]) -> Vec<u8> {
     let nt = encode_integer(name_type);
     let mut ns = Vec::new();
-    for n in names { ns.extend(encode_general_string(n)); }
+    for n in names {
+        ns.extend(encode_general_string(n));
+    }
     let nseq = encode_sequence(&[&ns]);
     let mut c = Vec::new();
     c.extend(encode_context_tag(0, &nt));
     c.extend(encode_context_tag(1, &nseq));
     encode_sequence(&[&c])
 }
-

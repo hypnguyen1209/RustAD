@@ -1,15 +1,15 @@
-use serde::{Deserialize, Serialize};
-use serde_json::value::Value;
 use ldap3::SearchEntry;
 use log::{debug, trace};
+use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::enums::regex::OBJECT_SID_RE1;
-use crate::objects::common::{LdapObject, AceTemplate, SPNTarget, Link, Member};
 use crate::enums::acl::parse_ntsecuritydescriptor;
+use crate::enums::regex::OBJECT_SID_RE1;
 use crate::enums::secdesc::LdapSid;
 use crate::enums::sid::{objectsid_to_vec8, sid_maker};
+use crate::objects::common::{AceTemplate, LdapObject, Link, Member, SPNTarget};
 use crate::utils::date::string_to_epoch;
 
 /// Group structure
@@ -34,7 +34,9 @@ pub struct Group {
 impl Group {
     // New group.
     pub fn new() -> Self {
-        Self { ..Default::default() }
+        Self {
+            ..Default::default()
+        }
     }
 
     // Immutable access.
@@ -189,16 +191,14 @@ impl Group {
                         || sid.ends_with("-520")
                     {
                         self.properties.highvalue = true;
-                    }
-                    else if sid.ends_with("S-1-5-32-544")
+                    } else if sid.ends_with("S-1-5-32-544")
                         || sid.ends_with("S-1-5-32-548")
                         || sid.ends_with("S-1-5-32-549")
                         || sid.ends_with("S-1-5-32-550")
                         || sid.ends_with("S-1-5-32-551")
                     {
                         self.properties.highvalue = true;
-                    }
-                    else {
+                    } else {
                         self.properties.highvalue = false;
                     }
                 }
@@ -225,10 +225,7 @@ impl Group {
             self.object_identifier.to_string(),
         );
         // Push DN and Type
-        sid_type.insert(
-            self.object_identifier.to_string(),
-            "Group".to_string(),
-        );
+        sid_type.insert(self.object_identifier.to_string(), "Group".to_string());
 
         // Trace and return Group struct
         // trace!("JSON OUTPUT: {:?}",serde_json::to_string(&self).unwrap());
@@ -252,13 +249,21 @@ impl LdapObject for Group {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
-    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
+    fn get_links(&self) -> &Vec<Link> {
+        &crate::objects::common::EMPTY_VEC_LINK
+    }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_child_objects(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
     fn get_haslaps(&self) -> &bool {
         &false
     }

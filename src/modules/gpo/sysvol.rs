@@ -13,9 +13,9 @@ use std::collections::HashSet;
 
 use log::{debug, info, warn};
 
+use crate::args::Options;
 use crate::objects::gpo::Gpo;
 use crate::transport::smb::{connect_sysvol, list_dir, try_read_file, SmbAuth};
-use crate::args::Options;
 
 use super::types::{GppLocalGroup, PrivilegeAssignment, RestrictedGroupDirective};
 use super::{parse_gpttmpl_bytes, parse_groups_xml};
@@ -67,7 +67,10 @@ fn is_gpo_guid(name: &str) -> bool {
 }
 
 /// Build the SMB target and credentials, then collect GPO directives off SYSVOL.
-pub async fn collect_sysvol_targets(common_args: &Options, scope: &ComputerGpoScope) -> anyhow::Result<Vec<SysvolGpo>> {
+pub async fn collect_sysvol_targets(
+    common_args: &Options,
+    scope: &ComputerGpoScope,
+) -> anyhow::Result<Vec<SysvolGpo>> {
     use crate::transport::smb::{nt_hash_from_str, smb_user, SmbAuth};
 
     let user = smb_user(common_args.username.as_deref().unwrap_or_default());
@@ -94,8 +97,19 @@ pub async fn collect_sysvol_targets(common_args: &Options, scope: &ComputerGpoSc
         let spn = format!("cifs/{dc_host}");
         let (gss_blob, session_key) =
             crate::transport::kerberos::kerberos_material_for(&ccache, &spn, &dc_host).await?;
-        let auth = SmbAuth::Kerberos { gss_blob: &gss_blob, session_key: &session_key };
-        return collect(&dc_host, &common_args.domain, &common_args.domain, &user, auth, scope).await;
+        let auth = SmbAuth::Kerberos {
+            gss_blob: &gss_blob,
+            session_key: &session_key,
+        };
+        return collect(
+            &dc_host,
+            &common_args.domain,
+            &common_args.domain,
+            &user,
+            auth,
+            scope,
+        )
+        .await;
     }
 
     // Password / pass the hash.
@@ -103,7 +117,15 @@ pub async fn collect_sysvol_targets(common_args: &Options, scope: &ComputerGpoSc
         Some(h) => SmbAuth::Hash(h),
         None => SmbAuth::Password(&password),
     };
-    collect(&dc_host, &common_args.domain, &common_args.domain, &user, auth, scope).await
+    collect(
+        &dc_host,
+        &common_args.domain,
+        &common_args.domain,
+        &user,
+        auth,
+        scope,
+    )
+    .await
 }
 
 /// Connect to `dc_host` SYSVOL and collect GPO directives.
@@ -150,11 +172,13 @@ async fn collect(
                 }
                 // Snaffler: scan GptTmpl.inf content for credentials
                 if let Ok(text) = String::from_utf8(bytes.clone()) {
-                    gpo.sensitive_findings.extend(
-                        crate::snaffler::scanner::scan_file(&files.gpttmpl, Some(&text))
-                    );
+                    gpo.sensitive_findings
+                        .extend(crate::snaffler::scanner::scan_file(
+                            &files.gpttmpl,
+                            Some(&text),
+                        ));
                 }
-            },
+            }
             Ok(None) => {} // absent, normal
             Err(_) => {}   // real error already logged by try_read_file
         }
@@ -169,11 +193,10 @@ async fn collect(
                     }
                     // Snaffler: scan Groups.xml for GPP cpassword / credentials
                     if let Ok(text) = String::from_utf8(bytes.clone()) {
-                        gpo.sensitive_findings.extend(
-                            crate::snaffler::scanner::scan_file(path, Some(&text))
-                        );
+                        gpo.sensitive_findings
+                            .extend(crate::snaffler::scanner::scan_file(path, Some(&text)));
                     }
-                },
+                }
                 Ok(None) => {}
                 Err(_) => {}
             }

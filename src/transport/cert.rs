@@ -29,7 +29,11 @@ pub fn build_client_config(
     let (certs, key_der) = match (pfx, crt, key) {
         (Some(pfx_path), _, _) => load_pfx(pfx_path, pfx_pass.unwrap_or(""))?,
         (None, Some(crt_path), Some(key_path)) => load_pem(crt_path, key_path)?,
-        _ => return Err(anyhow!("certificate auth requires --pfx, or both --crt and --key")),
+        _ => {
+            return Err(anyhow!(
+                "certificate auth requires --pfx, or both --crt and --key"
+            ))
+        }
     };
 
     // TLS 1.2 only: some Server 2016 DCs do not answer a TLS 1.3 ClientHello on LDAPS.
@@ -50,8 +54,10 @@ fn load_pfx(
     use p12_keystore::{KeyStore, KeyStoreEntry, Pkcs12ImportPolicy};
 
     let data = std::fs::read(path).with_context(|| format!("read pfx {path}"))?;
-    let ks = KeyStore::from_pkcs12(&data, password, Pkcs12ImportPolicy::default())
-        .map_err(|e| anyhow!("parse pfx (convert to PEM with `openssl pkcs12` if this fails): {e:?}"))?;
+    let ks =
+        KeyStore::from_pkcs12(&data, password, Pkcs12ImportPolicy::default()).map_err(|e| {
+            anyhow!("parse pfx (convert to PEM with `openssl pkcs12` if this fails): {e:?}")
+        })?;
 
     for (_alias, entry) in ks.entries() {
         if let KeyStoreEntry::PrivateKeyChain(chain) = entry {

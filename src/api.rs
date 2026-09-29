@@ -9,30 +9,20 @@ const CACHE_DIR: &str = ".cache";
 const CACHE_FILE: &str = "ldap.bin";
 
 use crate::{
-    args::Options, banner::progress_bar, enums::{PARSER_MOD_RE1, PARSER_MOD_RE2, Type, get_type}, json::checker::check_all_result, 
-    objects::{
-        aiaca::AIACA,
-        certtemplate::CertTemplate,
-        common::parse_unknown,
-        computer::Computer,
-        container::Container,
-        domain::Domain,
-        enterpriseca::EnterpriseCA,
-        fsp::Fsp,
-        gpo::Gpo,
-        group::Group,
-        inssuancepolicie::IssuancePolicie,
-        ntauthstore::NtAuthStore,
-        ou::Ou,
-        rootca::RootCA,
-        trust::Trust,
-        user::User,
-        schema::Schema,
-    },
-    transport::ldap::{LdapSearchEntry, collect_from_ldap_into},
-    storage::{DiskStorageReader, DiskStorage, EntrySource},
-    modules::run_modules,
+    args::Options,
+    banner::progress_bar,
+    enums::{get_type, Type, PARSER_MOD_RE1, PARSER_MOD_RE2},
+    json::checker::check_all_result,
     json::maker::make_result,
+    modules::run_modules,
+    objects::{
+        aiaca::AIACA, certtemplate::CertTemplate, common::parse_unknown, computer::Computer,
+        container::Container, domain::Domain, enterpriseca::EnterpriseCA, fsp::Fsp, gpo::Gpo,
+        group::Group, inssuancepolicie::IssuancePolicie, ntauthstore::NtAuthStore, ou::Ou,
+        rootca::RootCA, schema::Schema, trust::Trust, user::User,
+    },
+    storage::{DiskStorage, DiskStorageReader, EntrySource},
+    transport::ldap::{collect_from_ldap_into, LdapSearchEntry},
 };
 
 #[derive(Default)]
@@ -101,7 +91,10 @@ pub async fn prepare_results_from_disk(
 }
 
 /// Post-parse pass: replace and add missing values.
-fn run_checker(options: &Options, ad_results: &mut ADResults) -> Result<(), Box<dyn std::error::Error>> {
+fn run_checker(
+    options: &Options,
+    ad_results: &mut ADResults,
+) -> Result<(), Box<dyn std::error::Error>> {
     check_all_result(
         options,
         &mut ad_results.users,
@@ -184,31 +177,64 @@ fn parse_one(
     let parsed = match atype {
         Type::User => {
             let mut user = User::new();
-            user.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            user.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::User(Box::new(user))
         }
         Type::Group => {
             let mut group = Group::new();
-            group.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            group.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::Group(Box::new(group))
         }
         Type::Computer => {
             let mut computer = Computer::new();
             computer.parse(
-                entry, domain,
-                &mut m.dn_sid, &mut m.sid_type, &mut m.fqdn_sid, &mut m.fqdn_ip,
-                domain_sid, schema_guid_map,
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                &mut m.fqdn_sid,
+                &mut m.fqdn_ip,
+                domain_sid,
+                schema_guid_map,
             )?;
             Parsed::Computer(Box::new(computer))
         }
         Type::Ou => {
             let mut ou = Ou::new();
-            ou.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            ou.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::Ou(Box::new(ou))
         }
         Type::Gpo => {
             let mut gpo = Gpo::new();
-            gpo.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            gpo.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::Gpo(Box::new(gpo))
         }
         Type::ForeignSecurityPrincipal => {
@@ -223,7 +249,14 @@ fn parse_one(
                 Parsed::Skip
             } else {
                 let mut container = Container::new();
-                container.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+                container.parse(
+                    entry,
+                    domain,
+                    &mut m.dn_sid,
+                    &mut m.sid_type,
+                    domain_sid,
+                    schema_guid_map,
+                )?;
                 Parsed::Container(Box::new(container))
             }
         }
@@ -234,32 +267,74 @@ fn parse_one(
         }
         Type::NtAutStore => {
             let mut nt_auth_store = NtAuthStore::new();
-            nt_auth_store.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            nt_auth_store.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::NtAuthStore(Box::new(nt_auth_store))
         }
         Type::AIACA => {
             let mut aiaca = AIACA::new();
-            aiaca.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            aiaca.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::AIACA(Box::new(aiaca))
         }
         Type::RootCA => {
             let mut root_ca = RootCA::new();
-            root_ca.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            root_ca.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::RootCA(Box::new(root_ca))
         }
         Type::EnterpriseCA => {
             let mut enterprise_ca = EnterpriseCA::new();
-            enterprise_ca.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            enterprise_ca.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::EnterpriseCA(Box::new(enterprise_ca))
         }
         Type::CertTemplate => {
             let mut cert_template = CertTemplate::new();
-            cert_template.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            cert_template.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::CertTemplate(Box::new(cert_template))
         }
         Type::IssuancePolicie => {
             let mut issuance_policie = IssuancePolicie::new();
-            issuance_policie.parse(entry, domain, &mut m.dn_sid, &mut m.sid_type, domain_sid, schema_guid_map)?;
+            issuance_policie.parse(
+                entry,
+                domain,
+                &mut m.dn_sid,
+                &mut m.sid_type,
+                domain_sid,
+                schema_guid_map,
+            )?;
             Parsed::IssuancePolicie(Box::new(issuance_policie))
         }
         // Handled sequentially before the bulk; should not reach here.
@@ -297,7 +372,9 @@ fn parse_batch(
         let schema_guid_map = &results.mappings.schema_guid_map;
         entries
             .into_par_iter()
-            .map(|entry| parse_one(entry, domain, domain_sid, schema_guid_map).map_err(|e| e.to_string()))
+            .map(|entry| {
+                parse_one(entry, domain, domain_sid, schema_guid_map).map_err(|e| e.to_string())
+            })
             .collect()
     };
 
@@ -336,7 +413,11 @@ fn parse_batch(
 }
 
 /// Advance the parsing progress bar.
-fn update_progress(count: &mut usize, total: Option<usize>, pb: &ProgressBar) -> Result<(), Box<dyn Error>> {
+fn update_progress(
+    count: &mut usize,
+    total: Option<usize>,
+    pb: &ProgressBar,
+) -> Result<(), Box<dyn Error>> {
     if let Some(total) = total {
         *count += 1;
         // Percentage (%) = 100 x partial value / total value
@@ -382,11 +463,28 @@ pub fn parse_result_type_from_source(
 
     for entry in source.into_entry_iter() {
         let entry: SearchEntry = entry?.into();
-        route_entry(entry, &mut results, &mut buffer, domain, &mut domain_sid, &mut count, total, &pb)?;
+        route_entry(
+            entry,
+            &mut results,
+            &mut buffer,
+            domain,
+            &mut domain_sid,
+            &mut count,
+            total,
+            &pb,
+        )?;
     }
 
     // Parse whatever remains in the buffer.
-    parse_batch(&mut buffer, &mut results, domain, &domain_sid, &mut count, total, &pb)?;
+    parse_batch(
+        &mut buffer,
+        &mut results,
+        domain,
+        &domain_sid,
+        &mut count,
+        total,
+        &pb,
+    )?;
 
     pb.finish_and_clear();
     log::info!("Parsing LDAP objects finished!");
@@ -420,7 +518,15 @@ fn route_entry(
             // domain_sid they were collected under (matches the single-threaded
             // ordering). In practice the domain object precedes the bulk, so the
             // buffer is empty here.
-            parse_batch(buffer, results, domain, domain_sid.as_str(), count, total, pb)?;
+            parse_batch(
+                buffer,
+                results,
+                domain,
+                domain_sid.as_str(),
+                count,
+                total,
+                pb,
+            )?;
 
             let mut domain_object = Domain::new();
             let domain_sid_from_domain = domain_object.parse(
@@ -442,7 +548,15 @@ fn route_entry(
         _ => {
             buffer.push(entry);
             if buffer.len() >= PARSE_BATCH {
-                parse_batch(buffer, results, domain, domain_sid.as_str(), count, total, pb)?;
+                parse_batch(
+                    buffer,
+                    results,
+                    domain,
+                    domain_sid.as_str(),
+                    count,
+                    total,
+                    pb,
+                )?;
             }
         }
     }
@@ -478,7 +592,16 @@ pub fn parse_result_type_from_disk(
             Some(Ok(blob)) => {
                 raw_buf.push(blob);
                 if raw_buf.len() >= PARSE_BATCH {
-                    decode_and_route(&mut raw_buf, &mut results, &mut buffer, domain, &mut domain_sid, &mut count, total, &pb)?;
+                    decode_and_route(
+                        &mut raw_buf,
+                        &mut results,
+                        &mut buffer,
+                        domain,
+                        &mut domain_sid,
+                        &mut count,
+                        total,
+                        &pb,
+                    )?;
                 }
             }
             Some(Err(e)) => return Err(e.into()),
@@ -487,8 +610,25 @@ pub fn parse_result_type_from_disk(
     }
 
     // Decode and route any remaining raw records, then parse the last bulk batch.
-    decode_and_route(&mut raw_buf, &mut results, &mut buffer, domain, &mut domain_sid, &mut count, total, &pb)?;
-    parse_batch(&mut buffer, &mut results, domain, &domain_sid, &mut count, total, &pb)?;
+    decode_and_route(
+        &mut raw_buf,
+        &mut results,
+        &mut buffer,
+        domain,
+        &mut domain_sid,
+        &mut count,
+        total,
+        &pb,
+    )?;
+    parse_batch(
+        &mut buffer,
+        &mut results,
+        domain,
+        &domain_sid,
+        &mut count,
+        total,
+        &pb,
+    )?;
 
     pb.finish_and_clear();
     log::info!("Parsing LDAP objects finished!");
@@ -570,7 +710,8 @@ pub async fn run_collection(
 
     if options.analyze {
         log::info!("Running attack surface analysis...");
-        let report = crate::analyze::run_analysis(&results, &options.domain, options.owned.as_deref())?;
+        let report =
+            crate::analyze::run_analysis(&results, &options.domain, options.owned.as_deref())?;
         crate::analyze::report::print_report(&report, None, &options.path);
     }
 

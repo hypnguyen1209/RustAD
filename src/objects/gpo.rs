@@ -183,13 +183,21 @@ impl LdapObject for Gpo {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
-    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
+    fn get_links(&self) -> &Vec<Link> {
+        &crate::objects::common::EMPTY_VEC_LINK
+    }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_child_objects(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
     fn get_haslaps(&self) -> &bool {
         &false
     }

@@ -14,11 +14,7 @@ use crate::modules::adcs::probe_enterpriseca_esc8;
 use crate::modules::gpo::sysvol::collect_sysvol_targets;
 
 /// Function to run all modules requested
-pub async fn run_modules(
-    common_args: &Options,
-    ad: &mut ADResults
-) -> Result<(), Box<dyn Error>> {
-
+pub async fn run_modules(common_args: &Options, ad: &mut ADResults) -> Result<(), Box<dyn Error>> {
     let skip_smb = !common_args.has_smb_creds();
     if skip_smb {
         log::info!("No SMB credentials available: skipping sessions and GPO/SYSVOL modules.");
@@ -66,9 +62,11 @@ pub async fn run_modules(
             .iter()
             .map(|ca| ca.dns_host().to_string())
             .collect();
-        let probes = future::join_all(hosts.into_iter().map(|host| {
-            tokio::task::spawn_blocking(move || probe_enterpriseca_esc8(&host))
-        }))
+        let probes = future::join_all(
+            hosts
+                .into_iter()
+                .map(|host| tokio::task::spawn_blocking(move || probe_enterpriseca_esc8(&host))),
+        )
         .await;
         for (ca, probe) in ad.enterprisecas.iter_mut().zip(probes) {
             match probe {

@@ -1,14 +1,13 @@
-use chrono::{NaiveDateTime, Local};
+use chrono::{Local, NaiveDateTime};
 use std::convert::TryInto;
 use std::error::Error;
 //use log::trace;
 // special thanks to: https://github.com/NH-RED-TEAM/RustHound/pull/30/commits/e4b5dbc0f147dd0f8efe64d515e0a18b69937aeb
 
 /// Change date timestamp format to epoch format.
-pub fn convert_timestamp(timestamp: i64) -> i64
-{
-    let offset: i64 = 134774*24*60*60;
-    let epoch: i64 = timestamp/10000000-offset;
+pub fn convert_timestamp(timestamp: i64) -> i64 {
+    let offset: i64 = 134774 * 24 * 60 * 60;
+    let epoch: i64 = timestamp / 10000000 - offset;
     epoch
 }
 
@@ -17,28 +16,24 @@ pub fn string_to_epoch(date: &str) -> Result<i64, Box<dyn Error>> {
     // Extract the portion before the dot
     // yyyyMMddHHmmss.0z to epoch format
     let str_representation = date.split('.').next().ok_or("Invalid date format")?;
-    
+
     // Parse the date and convert to epoch
     let naive_date = NaiveDateTime::parse_from_str(str_representation, "%Y%m%d%H%M%S")?;
     Ok(naive_date.and_utc().timestamp())
 }
 
-
 /// Function to return current hours.
-pub fn return_current_time() -> String
-{
+pub fn return_current_time() -> String {
     Local::now().format("%T").to_string()
 }
 
 /// Function to return current date.
-pub fn return_current_date() -> String
-{
+pub fn return_current_date() -> String {
     Local::now().format("%D").to_string()
 }
 
 /// Function to return current date.
-pub fn return_current_fulldate() -> String
-{
+pub fn return_current_fulldate() -> String {
     Local::now().format("%Y%m%d%H%M%S").to_string()
 }
 

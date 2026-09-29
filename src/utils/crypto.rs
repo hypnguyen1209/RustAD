@@ -1,4 +1,4 @@
-use sha1::{Sha1, Digest};
+use sha1::{Digest, Sha1};
 
 /// Easy function to get SHA1 hash
 pub fn calculate_sha1(data: &[u8]) -> String {

@@ -35,7 +35,10 @@ pub async fn tgt_deleg(
         //
         // This requires the `windows` crate with Security feature, which adds
         // significant compile-time overhead. Stubbed for now.
-        Err("tgtdeleg: Windows SSPI implementation pending (needs windows crate Security feature)".into())
+        Err(
+            "tgtdeleg: Windows SSPI implementation pending (needs windows crate Security feature)"
+                .into(),
+        )
     }
 
     #[cfg(not(windows))]

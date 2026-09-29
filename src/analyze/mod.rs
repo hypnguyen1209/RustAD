@@ -1,12 +1,16 @@
-pub mod graph;
 pub mod checks;
+pub mod graph;
 pub mod report;
 
 use crate::api::ADResults;
 use graph::AdGraph;
 use std::error::Error;
 
-pub fn run_analysis(ad: &ADResults, domain: &str, owned: Option<&str>) -> Result<AnalysisReport, Box<dyn Error>> {
+pub fn run_analysis(
+    ad: &ADResults,
+    domain: &str,
+    owned: Option<&str>,
+) -> Result<AnalysisReport, Box<dyn Error>> {
     let g = graph::build_graph(ad, domain);
     let health = checks::collection_health(&g);
     let kerberoastable = checks::kerberoastable(&g);

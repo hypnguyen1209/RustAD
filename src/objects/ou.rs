@@ -1,14 +1,14 @@
-use serde_json::value::Value;
-use serde::{Deserialize, Serialize};
 use ldap3::SearchEntry;
 use log::{debug, trace};
+use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::objects::common::{LdapObject, AceTemplate, GPOChange, Link, SPNTarget, Member};
 use crate::enums::acl::parse_ntsecuritydescriptor;
 use crate::enums::gplink::parse_gplink;
 use crate::enums::sid::decode_guid_le;
+use crate::objects::common::{AceTemplate, GPOChange, LdapObject, Link, Member, SPNTarget};
 use crate::utils::date::string_to_epoch;
 
 /// Ou structure
@@ -37,7 +37,9 @@ pub struct Ou {
 impl Ou {
     // New computer.
     pub fn new() -> Self {
-        Self { ..Default::default() }
+        Self {
+            ..Default::default()
+        }
     }
 
     // Immutable access.
@@ -87,68 +89,65 @@ impl Ou {
 
         // Check and replace value
         for (key, value) in &result_attrs {
-             match key.as_str() {
-                 "name" => {
-                     let name = &value[0];
-                     let email = format!("{}@{}", name.to_owned(), domain);
-                     self.properties.name = email.to_uppercase();
-                 }
-                 "description" => {
-                     self.properties.description = value.first().cloned();
-                 }
-                 "whenCreated" => {
-                     let epoch = string_to_epoch(&value[0])?;
-                     if epoch.is_positive() {
-                          self.properties.whencreated = epoch;
-                     }
-                 }
-                 "gPLink" => {
-                     self.links = parse_gplink(value[0].to_string())?;
-                 }
-                 "gPOtions" => {
-                     self.properties.blocksinheritance = value[0].parse::<i64>().unwrap_or(0) == 1;
-                 }
-                 "isDeleted" => {
-                     self.is_deleted = true;
-                 }
-                 _ => {}
-             }
+            match key.as_str() {
+                "name" => {
+                    let name = &value[0];
+                    let email = format!("{}@{}", name.to_owned(), domain);
+                    self.properties.name = email.to_uppercase();
+                }
+                "description" => {
+                    self.properties.description = value.first().cloned();
+                }
+                "whenCreated" => {
+                    let epoch = string_to_epoch(&value[0])?;
+                    if epoch.is_positive() {
+                        self.properties.whencreated = epoch;
+                    }
+                }
+                "gPLink" => {
+                    self.links = parse_gplink(value[0].to_string())?;
+                }
+                "gPOtions" => {
+                    self.properties.blocksinheritance = value[0].parse::<i64>().unwrap_or(0) == 1;
+                }
+                "isDeleted" => {
+                    self.is_deleted = true;
+                }
+                _ => {}
+            }
         }
 
-          // For all, bins attributes
+        // For all, bins attributes
         for (key, value) in &result_bin {
-             match key.as_str() {
-                 "objectGUID" => {
-                     // objectGUID raw to string
-                     self.object_identifier = decode_guid_le(&value[0]).to_owned();
-                 }
-                 "nTSecurityDescriptor" => {
-                     // trace!("nTSecurityDescriptor ACES ACLS ?");
-                     // nTSecurityDescriptor raw to string
-                     let relations_ace = parse_ntsecuritydescriptor(
-                          self,
-                          &value[0],
-                          "OU",
-                          &result_attrs,
-                          &result_bin,
-                          domain,
-                          schema_guid_map,
-                     );
-                     self.aces = relations_ace;
-                 }
-                 _ => {}
-             }
+            match key.as_str() {
+                "objectGUID" => {
+                    // objectGUID raw to string
+                    self.object_identifier = decode_guid_le(&value[0]).to_owned();
+                }
+                "nTSecurityDescriptor" => {
+                    // trace!("nTSecurityDescriptor ACES ACLS ?");
+                    // nTSecurityDescriptor raw to string
+                    let relations_ace = parse_ntsecuritydescriptor(
+                        self,
+                        &value[0],
+                        "OU",
+                        &result_attrs,
+                        &result_bin,
+                        domain,
+                        schema_guid_map,
+                    );
+                    self.aces = relations_ace;
+                }
+                _ => {}
+            }
         }
         // Push DN and SID in HashMap
         dn_sid.insert(
-             self.properties.distinguishedname.to_string(),
-             self.object_identifier.to_string(),
+            self.properties.distinguishedname.to_string(),
+            self.object_identifier.to_string(),
         );
         // Push DN and Type
-        sid_type.insert(
-            self.object_identifier.to_string(),
-             "OU".to_string(),
-        );
+        sid_type.insert(self.object_identifier.to_string(), "OU".to_string());
 
         // Trace and return Ou struct
         // trace!("JSON OUTPUT: {:?}",serde_json::to_string(&self).unwrap());
@@ -172,8 +171,12 @@ impl LdapObject for Ou {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
     fn get_links(&self) -> &Vec<Link> {
         &self.links
     }
@@ -234,7 +237,7 @@ pub struct OuProperties {
     highvalue: bool,
     description: Option<String>,
     whencreated: i64,
-    blocksinheritance: bool
+    blocksinheritance: bool,
 }
 
 impl OuProperties {
@@ -245,7 +248,6 @@ impl OuProperties {
     pub fn distinguishedname(&self) -> &String {
         &self.distinguishedname
     }
-
 
     pub fn isaclprotected_mut(&mut self) -> &mut bool {
         &mut self.isaclprotected

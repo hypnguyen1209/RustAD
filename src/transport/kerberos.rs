@@ -66,7 +66,10 @@ pub async fn kerberos_material_for(
                 .unwrap_or(false)
         })
         .ok_or_else(|| {
-            warn!("[krb] no krbtgt credential in ccache ({} creds)", creds.len());
+            warn!(
+                "[krb] no krbtgt credential in ccache ({} creds)",
+                creds.len()
+            );
             anyhow!("no TGT (krbtgt) found in ccache")
         })?;
 
@@ -154,7 +157,11 @@ impl<'a> Reader<'a> {
         for _ in 0..num {
             components.push(self.data()?);
         }
-        Ok(CcachePrincipal { name_type, realm, components })
+        Ok(CcachePrincipal {
+            name_type,
+            realm,
+            components,
+        })
     }
 }
 
@@ -211,7 +218,12 @@ fn parse_ccache(bytes: &[u8]) -> Result<Vec<CcacheCred>> {
                 .collect::<Vec<_>>()
                 .join("/")
         );
-        creds.push(CcacheCred { server, client, key, ticket });
+        creds.push(CcacheCred {
+            server,
+            client,
+            key,
+            ticket,
+        });
     }
     Ok(creds)
 }
@@ -222,20 +234,29 @@ fn aes256() -> Box<dyn Cipher> {
     CipherSuite::Aes256CtsHmacSha196.cipher()
 }
 fn session_etype(key: &[u8]) -> u8 {
-    if key.len() == 16 { ETYPE_RC4_HMAC } else { ETYPE_AES256 }
+    if key.len() == 16 {
+        ETYPE_RC4_HMAC
+    } else {
+        ETYPE_AES256
+    }
 }
 fn enc_session(key: &[u8], usage: i32, data: &[u8]) -> Result<Vec<u8>> {
     if key.len() == 16 {
         Ok(ms_pac_forge::checksum::rc4_encrypt(key, usage, data, None))
     } else {
-        aes256().encrypt(key, usage, data).map_err(|e| anyhow!("encrypt (AES): {e}"))
+        aes256()
+            .encrypt(key, usage, data)
+            .map_err(|e| anyhow!("encrypt (AES): {e}"))
     }
 }
 fn dec_session(key: &[u8], usage: i32, ct: &[u8]) -> Result<Vec<u8>> {
     if key.len() == 16 {
-        ms_pac_forge::checksum::rc4_decrypt(key, usage, ct).map_err(|e| anyhow!("decrypt (RC4): {e}"))
+        ms_pac_forge::checksum::rc4_decrypt(key, usage, ct)
+            .map_err(|e| anyhow!("decrypt (RC4): {e}"))
     } else {
-        aes256().decrypt(key, usage, ct).map_err(|e| anyhow!("decrypt (AES): {e}"))
+        aes256()
+            .decrypt(key, usage, ct)
+            .map_err(|e| anyhow!("decrypt (AES): {e}"))
     }
 }
 
@@ -247,7 +268,10 @@ fn krb_string(s: &str) -> Result<GeneralStringAsn1> {
     Ok(GeneralStringAsn1::from(ia5))
 }
 fn principal(name_type: u8, parts: &[&str]) -> Result<PrincipalName> {
-    let strings = parts.iter().map(|p| krb_string(p)).collect::<Result<Vec<_>>>()?;
+    let strings = parts
+        .iter()
+        .map(|p| krb_string(p))
+        .collect::<Result<Vec<_>>>()?;
     Ok(PrincipalName {
         name_type: ExplicitContextTag0::from(IntegerAsn1(vec![name_type])),
         name_string: ExplicitContextTag1::from(Asn1SequenceOf::from(strings)),
@@ -255,11 +279,22 @@ fn principal(name_type: u8, parts: &[&str]) -> Result<PrincipalName> {
 }
 fn now_kerberos_time() -> KerberosTime {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
     let (y, m, d) = civil_from_days(secs.div_euclid(86_400));
     let tod = secs.rem_euclid(86_400);
     KerberosTime::from(
-        Date::new(y, m, d, (tod / 3600) as u8, ((tod % 3600) / 60) as u8, (tod % 60) as u8).unwrap(),
+        Date::new(
+            y,
+            m,
+            d,
+            (tod / 3600) as u8,
+            ((tod % 3600) / 60) as u8,
+            (tod % 60) as u8,
+        )
+        .unwrap(),
     )
 }
 fn far_future_time() -> KerberosTime {
@@ -301,7 +336,11 @@ fn krb_err(resp: &[u8]) -> String {
 
 async fn kdc_exchange(kdc: &str, request: &[u8]) -> Result<Vec<u8>> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    let addr = if kdc.contains(':') { kdc.to_string() } else { format!("{kdc}:88") };
+    let addr = if kdc.contains(':') {
+        kdc.to_string()
+    } else {
+        format!("{kdc}:88")
+    };
 
     trace!("[krb] KDC connect {addr}, sending {} bytes", request.len());
     let mut stream = tokio::net::TcpStream::connect(&addr).await.map_err(|e| {
@@ -346,7 +385,12 @@ impl Tgt {
             .map_err(|e| anyhow!("decode ticket DER: {e}"))?;
         let parts: Vec<&str> = components.iter().map(|s| s.as_str()).collect();
         let cname = principal(name_type as u8, &parts)?;
-        Ok(Tgt { ticket, session_key, cname, crealm: realm })
+        Ok(Tgt {
+            ticket,
+            session_key,
+            cname,
+            crealm: realm,
+        })
     }
 }
 
@@ -371,14 +415,24 @@ fn ap_req_padata(tgt: &Tgt) -> Result<PaData> {
         seq_number: Optional::from(None),
         authorization_data: Optional::from(None),
     });
-    let auth_der = picky_asn1_der::to_vec(&authenticator).map_err(|e| anyhow!("authenticator: {e}"))?;
-    let enc_auth = enc_session(&tgt.session_key, TGS_REQ_PA_DATA_AP_REQ_AUTHENTICATOR, &auth_der)?;
+    let auth_der =
+        picky_asn1_der::to_vec(&authenticator).map_err(|e| anyhow!("authenticator: {e}"))?;
+    let enc_auth = enc_session(
+        &tgt.session_key,
+        TGS_REQ_PA_DATA_AP_REQ_AUTHENTICATOR,
+        &auth_der,
+    )?;
     let ap_req = ApReq::from(ApReqInner {
         pvno: ExplicitContextTag0::from(IntegerAsn1(vec![5])),
         msg_type: ExplicitContextTag1::from(IntegerAsn1(vec![AP_REQ_MSG_TYPE])),
-        ap_options: ExplicitContextTag2::from(BitStringAsn1::from(BitString::with_bytes(vec![0, 0, 0, 0]))),
+        ap_options: ExplicitContextTag2::from(BitStringAsn1::from(BitString::with_bytes(vec![
+            0, 0, 0, 0,
+        ]))),
         ticket: ExplicitContextTag3::from(tgt.ticket.clone()),
-        authenticator: ExplicitContextTag4::from(encrypted_data(session_etype(&tgt.session_key), enc_auth)),
+        authenticator: ExplicitContextTag4::from(encrypted_data(
+            session_etype(&tgt.session_key),
+            enc_auth,
+        )),
     });
     let ap_der = picky_asn1_der::to_vec(&ap_req).map_err(|e| anyhow!("AP-REQ: {e}"))?;
     Ok(PaData {
@@ -387,9 +441,16 @@ fn ap_req_padata(tgt: &Tgt) -> Result<PaData> {
     })
 }
 
-fn build_tgs_req(realm: &str, sname: PrincipalName, padatas: Vec<PaData>, etypes: &[u8]) -> Result<TgsReq> {
+fn build_tgs_req(
+    realm: &str,
+    sname: PrincipalName,
+    padatas: Vec<PaData>,
+    etypes: &[u8],
+) -> Result<TgsReq> {
     let body = KdcReqBody {
-        kdc_options: ExplicitContextTag0::from(BitStringAsn1::from(BitString::with_bytes(vec![0x40, 0x81, 0x00, 0x00]))),
+        kdc_options: ExplicitContextTag0::from(BitStringAsn1::from(BitString::with_bytes(vec![
+            0x40, 0x81, 0x00, 0x00,
+        ]))),
         cname: Optional::from(None),
         realm: ExplicitContextTag2::from(krb_string(realm)?),
         sname: Optional::from(Some(ExplicitContextTag3::from(sname))),
@@ -398,7 +459,10 @@ fn build_tgs_req(realm: &str, sname: PrincipalName, padatas: Vec<PaData>, etypes
         rtime: Optional::from(None),
         nonce: ExplicitContextTag7::from(nonce()),
         etype: ExplicitContextTag8::from(Asn1SequenceOf::from(
-            etypes.iter().map(|e| IntegerAsn1(vec![*e])).collect::<Vec<_>>(),
+            etypes
+                .iter()
+                .map(|e| IntegerAsn1(vec![*e]))
+                .collect::<Vec<_>>(),
         )),
         addresses: Optional::from(None),
         enc_authorization_data: Optional::from(None),
@@ -407,7 +471,9 @@ fn build_tgs_req(realm: &str, sname: PrincipalName, padatas: Vec<PaData>, etypes
     Ok(TgsReq::from(KdcReq {
         pvno: ExplicitContextTag1::from(IntegerAsn1(vec![5])),
         msg_type: ExplicitContextTag2::from(IntegerAsn1(vec![TGS_REQ_MSG_TYPE])),
-        padata: Optional::from(Some(ExplicitContextTag3::from(Asn1SequenceOf::from(padatas)))),
+        padata: Optional::from(Some(ExplicitContextTag3::from(Asn1SequenceOf::from(
+            padatas,
+        )))),
         req_body: ExplicitContextTag4::from(body),
     }))
 }
@@ -481,15 +547,21 @@ fn build_ap_req_gss(st: &ServiceTicket) -> Result<(Vec<u8>, [u8; 16])> {
         seq_number: Optional::from(None),
         authorization_data: Optional::from(None),
     });
-    let auth_der = picky_asn1_der::to_vec(&authenticator).map_err(|e| anyhow!("authenticator: {e}"))?;
+    let auth_der =
+        picky_asn1_der::to_vec(&authenticator).map_err(|e| anyhow!("authenticator: {e}"))?;
     let enc_auth = enc_session(&st.session_key, 11, &auth_der)?;
 
     let ap_req = ApReq::from(ApReqInner {
         pvno: ExplicitContextTag0::from(IntegerAsn1(vec![5])),
         msg_type: ExplicitContextTag1::from(IntegerAsn1(vec![AP_REQ_MSG_TYPE])),
-        ap_options: ExplicitContextTag2::from(BitStringAsn1::from(BitString::with_bytes(vec![0, 0, 0, 0]))),
+        ap_options: ExplicitContextTag2::from(BitStringAsn1::from(BitString::with_bytes(vec![
+            0, 0, 0, 0,
+        ]))),
         ticket: ExplicitContextTag3::from(st.ticket.clone()),
-        authenticator: ExplicitContextTag4::from(encrypted_data(session_etype(&st.session_key), enc_auth)),
+        authenticator: ExplicitContextTag4::from(encrypted_data(
+            session_etype(&st.session_key),
+            enc_auth,
+        )),
     });
     let ap_der = picky_asn1_der::to_vec(&ap_req).map_err(|e| anyhow!("AP-REQ: {e}"))?;
     Ok((super::gss::spnego_krb5_init(&ap_der), subkey))

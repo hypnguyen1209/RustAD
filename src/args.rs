@@ -1,12 +1,12 @@
 #[cfg(not(feature = "noargs"))]
-use clap::{Arg, ArgAction, value_parser, Command};
+use clap::{value_parser, Arg, ArgAction, Command};
 
-#[cfg(feature = "noargs")]
-use winreg::{RegKey,{enums::*}};
 #[cfg(feature = "noargs")]
 use crate::utils::exec::run;
 #[cfg(feature = "noargs")]
 use regex::Regex;
+#[cfg(feature = "noargs")]
+use winreg::{enums::*, RegKey};
 
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -96,7 +96,9 @@ impl Options {
         self.pfx.is_some() || self.crt.is_some()
     }
     pub fn has_smb_creds(&self) -> bool {
-        !self.sspi && !self.uses_cert() && (self.username.is_some() || self.hashes.is_some() || self.kerberos)
+        !self.sspi
+            && !self.uses_cert()
+            && (self.username.is_some() || self.hashes.is_some() || self.kerberos)
     }
 }
 
@@ -123,13 +125,32 @@ pub enum CollectionMethod {
 
 impl CollectionMethod {
     pub fn does_sessions(&self) -> bool {
-        matches!(self, Self::All | Self::Session | Self::RDP | Self::DCOM | Self::PSRemote)
+        matches!(
+            self,
+            Self::All | Self::Session | Self::RDP | Self::DCOM | Self::PSRemote
+        )
     }
-    pub fn srvsvc(&self) -> bool { matches!(self, Self::All | Self::Session) }
-    pub fn wkssvc(&self) -> bool { matches!(self, Self::All | Self::Session) }
-    pub fn registry(&self) -> bool { matches!(self, Self::All | Self::Session | Self::RegistryOnly) }
-    pub fn does_gpo(&self) -> bool { matches!(self, Self::All | Self::DCOnly | Self::Default | Self::GPOLocalGroup) }
-    pub fn does_ldap(&self) -> bool { !matches!(self, Self::Session | Self::RDP | Self::DCOM | Self::PSRemote) }
+    pub fn srvsvc(&self) -> bool {
+        matches!(self, Self::All | Self::Session)
+    }
+    pub fn wkssvc(&self) -> bool {
+        matches!(self, Self::All | Self::Session)
+    }
+    pub fn registry(&self) -> bool {
+        matches!(self, Self::All | Self::Session | Self::RegistryOnly)
+    }
+    pub fn does_gpo(&self) -> bool {
+        matches!(
+            self,
+            Self::All | Self::DCOnly | Self::Default | Self::GPOLocalGroup
+        )
+    }
+    pub fn does_ldap(&self) -> bool {
+        !matches!(
+            self,
+            Self::Session | Self::RDP | Self::DCOM | Self::PSRemote
+        )
+    }
 }
 
 pub const RUSTHOUND_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -390,7 +411,10 @@ fn cli() -> Command {
 pub fn extract_args() -> Options {
     let matches = cli().get_matches();
 
-    let d = matches.get_one::<String>("domain").map(|s| s.as_str()).unwrap();
+    let d = matches
+        .get_one::<String>("domain")
+        .map(|s| s.as_str())
+        .unwrap();
     let username = matches.get_one::<String>("ldapusername").cloned();
     let password = matches.get_one::<String>("ldappassword").cloned();
     let hashes = matches.get_one::<String>("hashes").cloned();
@@ -400,13 +424,25 @@ pub fn extract_args() -> Options {
         Some(val) => val.parse::<u16>().ok(),
         None => None,
     };
-    let n = matches.get_one::<String>("name-server").map(|s| s.as_str()).unwrap_or("not set");
-    let path = matches.get_one::<String>("output").map(|s| s.as_str()).unwrap_or("./");
+    let n = matches
+        .get_one::<String>("name-server")
+        .map(|s| s.as_str())
+        .unwrap_or("not set");
+    let path = matches
+        .get_one::<String>("output")
+        .map(|s| s.as_str())
+        .unwrap_or("./");
     let ldaps = matches.get_one::<bool>("ldaps").copied().unwrap_or(false);
     let dns_tcp = matches.get_one::<bool>("dns-tcp").copied().unwrap_or(false);
     let z = matches.get_one::<bool>("zip").copied().unwrap_or(false);
-    let fqdn_resolver = matches.get_one::<bool>("fqdn-resolver").copied().unwrap_or(false);
-    let kerberos = matches.get_one::<bool>("kerberos").copied().unwrap_or(false);
+    let fqdn_resolver = matches
+        .get_one::<bool>("fqdn-resolver")
+        .copied()
+        .unwrap_or(false);
+    let kerberos = matches
+        .get_one::<bool>("kerberos")
+        .copied()
+        .unwrap_or(false);
 
     let pfx = matches.get_one::<String>("pfx").cloned();
     let pfx_pass = matches.get_one::<String>("pfx-pass").cloned();
@@ -442,23 +478,38 @@ pub fn extract_args() -> Options {
         "PSRemote" => CollectionMethod::PSRemote,
         _ => CollectionMethod::All,
     };
-    let ldap_filter = matches.get_one::<String>("ldap-filter").map(|s| s.as_str()).unwrap_or("(objectClass=*)");
+    let ldap_filter = matches
+        .get_one::<String>("ldap-filter")
+        .map(|s| s.as_str())
+        .unwrap_or("(objectClass=*)");
 
     let cache = matches.get_flag("cache");
-    let cache_buffer_size = matches.get_one::<usize>("cache_buffer").copied().unwrap_or(1000);
+    let cache_buffer_size = matches
+        .get_one::<usize>("cache_buffer")
+        .copied()
+        .unwrap_or(1000);
     let resume = matches.get_flag("resume");
 
     let analyze = matches.get_one::<bool>("analyze").copied().unwrap_or(false);
 
     let session_loop = matches.get_one::<bool>("loop").copied().unwrap_or(false);
-    let loop_duration = matches.get_one::<u64>("loopduration").copied().unwrap_or(7200);
-    let loop_interval = matches.get_one::<u64>("loopinterval").copied().unwrap_or(120);
+    let loop_duration = matches
+        .get_one::<u64>("loopduration")
+        .copied()
+        .unwrap_or(7200);
+    let loop_interval = matches
+        .get_one::<u64>("loopinterval")
+        .copied()
+        .unwrap_or(120);
     let output_prefix = matches.get_one::<String>("outputprefix").cloned();
 
     let delay_ms = matches.get_one::<u64>("delay").copied().unwrap_or(0);
     let jitter_ms = matches.get_one::<u64>("jitter").copied().unwrap_or(0);
     let owned = matches.get_one::<String>("owned").cloned();
-    let exclude_dc = matches.get_one::<bool>("exclude-dc").copied().unwrap_or(false);
+    let exclude_dc = matches
+        .get_one::<bool>("exclude-dc")
+        .copied()
+        .unwrap_or(false);
     let opsec = matches.get_one::<bool>("opsec").copied().unwrap_or(false);
     let export_format = matches.get_one::<String>("export").cloned();
 
@@ -532,14 +583,20 @@ pub fn auto_args() -> Options {
             std::process::exit(1);
         }
     };
-    let fqdn = caps["ldap_fqdn"].to_string().trim_end_matches('.').to_string();
+    let fqdn = caps["ldap_fqdn"]
+        .to_string()
+        .trim_end_matches('.')
+        .to_string();
 
     let re = Regex::new(r"port.*= (?<ldap_port>[0-9]{3,})").unwrap();
     let mut values = re.captures_iter(&_fqdn);
     let caps = match values.next() {
         Some(c) => c,
         None => {
-            eprintln!("Failed to parse LDAP port from nslookup for domain: {}", &domain);
+            eprintln!(
+                "Failed to parse LDAP port from nslookup for domain: {}",
+                &domain
+            );
             std::process::exit(1);
         }
     };

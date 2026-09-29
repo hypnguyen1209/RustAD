@@ -27,8 +27,7 @@ use crate::objects::user::User;
 
 use super::sysvol::SysvolGpo;
 use super::types::{
-    GppGroupAction, GppMemberAction, RestrictedGroupDirective,
-    RestrictedGroupOperation,
+    GppGroupAction, GppMemberAction, RestrictedGroupDirective, RestrictedGroupOperation,
 };
 
 // ---- group identity ----------------------------------------------------------
@@ -118,10 +117,22 @@ impl ObjectResolver {
         let mut by_sid = HashMap::new();
 
         for u in users {
-            index_object(u.object_identifier(), u.properties().name(), "User", &mut by_name, &mut by_sid);
+            index_object(
+                u.object_identifier(),
+                u.properties().name(),
+                "User",
+                &mut by_name,
+                &mut by_sid,
+            );
         }
         for g in groups {
-            index_object(g.object_identifier(), g.properties().name(), "Group", &mut by_name, &mut by_sid);
+            index_object(
+                g.object_identifier(),
+                g.properties().name(),
+                "Group",
+                &mut by_name,
+                &mut by_sid,
+            );
         }
         for c in computers {
             let sid = c.object_identifier();
@@ -164,7 +175,9 @@ fn resolve_principal(raw: &str, resolver: &impl Resolver) -> Option<TypedPrincip
     }
     if p.len() >= 4 && p[..4].eq_ignore_ascii_case("S-1-") {
         let sid = p.to_uppercase();
-        let object_type = resolver.type_of_sid(&sid).unwrap_or_else(|| "Base".to_string());
+        let object_type = resolver
+            .type_of_sid(&sid)
+            .unwrap_or_else(|| "Base".to_string());
         return Some(TypedPrincipal { sid, object_type });
     }
     let bare = p.rsplit(['\\', '/']).next().unwrap_or(p);
@@ -214,10 +227,20 @@ fn actions_for_gpo(gpo: &SysvolGpo, resolver: &impl Resolver) -> Vec<Action> {
         let Some(group) = target else { continue };
 
         if grp.delete_all_users() {
-            out.push(Action { group, kind: Kind::LocalGroup, op: Op::DeleteUsers, principal: None });
+            out.push(Action {
+                group,
+                kind: Kind::LocalGroup,
+                op: Op::DeleteUsers,
+                principal: None,
+            });
         }
         if grp.delete_all_groups() {
-            out.push(Action { group, kind: Kind::LocalGroup, op: Op::DeleteGroups, principal: None });
+            out.push(Action {
+                group,
+                kind: Kind::LocalGroup,
+                op: Op::DeleteGroups,
+                principal: None,
+            });
         }
         for m in grp.members() {
             let op = match m.action() {
@@ -229,7 +252,12 @@ fn actions_for_gpo(gpo: &SysvolGpo, resolver: &impl Resolver) -> Vec<Action> {
                 .and_then(|s| resolve_principal(s, resolver))
                 .or_else(|| m.name().and_then(|n| resolve_principal(n, resolver)));
             if let Some(p) = principal {
-                out.push(Action { group, kind: Kind::LocalGroup, op, principal: Some(p) });
+                out.push(Action {
+                    group,
+                    kind: Kind::LocalGroup,
+                    op,
+                    principal: Some(p),
+                });
             }
         }
     }
@@ -241,7 +269,11 @@ fn actions_for_gpo(gpo: &SysvolGpo, resolver: &impl Resolver) -> Vec<Action> {
     out
 }
 
-fn push_restricted(dir: &RestrictedGroupDirective, resolver: &impl Resolver, out: &mut Vec<Action>) {
+fn push_restricted(
+    dir: &RestrictedGroupDirective,
+    resolver: &impl Resolver,
+    out: &mut Vec<Action>,
+) {
     match dir.operation() {
         RestrictedGroupOperation::ReplaceMembers => {
             let Some(group) = builtin_rid(dir.target()).and_then(TargetGroup::from_rid) else {
@@ -249,7 +281,12 @@ fn push_restricted(dir: &RestrictedGroupDirective, resolver: &impl Resolver, out
             };
             for raw in dir.principals() {
                 if let Some(p) = resolve_principal(raw, resolver) {
-                    out.push(Action { group, kind: Kind::RestrictedMember, op: Op::Add, principal: Some(p) });
+                    out.push(Action {
+                        group,
+                        kind: Kind::RestrictedMember,
+                        op: Op::Add,
+                        principal: Some(p),
+                    });
                 }
             }
         }
@@ -303,16 +340,24 @@ fn merge(actions: &[Action]) -> MergedGroups {
         for a in actions.iter().filter(|a| a.group == group) {
             match (a.kind, a.op) {
                 (Kind::RestrictedMember, _) => {
-                    if let Some(p) = &a.principal { restricted_member.push(p.clone()); }
+                    if let Some(p) = &a.principal {
+                        restricted_member.push(p.clone());
+                    }
                 }
                 (Kind::RestrictedMemberOf, _) => {
-                    if let Some(p) = &a.principal { restricted_memberof.push(p.clone()); }
+                    if let Some(p) = &a.principal {
+                        restricted_memberof.push(p.clone());
+                    }
                 }
                 (Kind::LocalGroup, Op::Add) => {
-                    if let Some(p) = &a.principal { local_groups.push(p.clone()); }
+                    if let Some(p) = &a.principal {
+                        local_groups.push(p.clone());
+                    }
                 }
                 (Kind::LocalGroup, Op::Delete) => {
-                    if let Some(p) = &a.principal { local_groups.retain(|x| x.sid != p.sid); }
+                    if let Some(p) = &a.principal {
+                        local_groups.retain(|x| x.sid != p.sid);
+                    }
                 }
                 (Kind::LocalGroup, Op::DeleteUsers) => {
                     local_groups.retain(|x| x.object_type != "User");
@@ -376,7 +421,13 @@ pub fn resolve_privileges(
             }
         }
     }
-    order.into_iter().map(|k| { let v = map.remove(&k).unwrap(); (k, v) }).collect()
+    order
+        .into_iter()
+        .map(|k| {
+            let v = map.remove(&k).unwrap();
+            (k, v)
+        })
+        .collect()
 }
 
 // ---- output helpers ----------------------------------------------------------
@@ -416,12 +467,18 @@ pub fn apply_gpo(
     let mut by_sid: HashMap<String, &SysvolGpo> = HashMap::new();
     for g in sysvol {
         let needle = g.guid.to_uppercase();
-        if let Some((_, sid)) = dn_sid.iter().find(|(dn, _)| dn.to_uppercase().contains(&needle)) {
+        if let Some((_, sid)) = dn_sid
+            .iter()
+            .find(|(dn, _)| dn.to_uppercase().contains(&needle))
+        {
             by_sid.insert(sid.to_uppercase(), g);
         }
     }
 
-    log::debug!("[gpo] {} SYSVOL GPO(s) bridged to a SID via dn_sid", by_sid.len());
+    log::debug!(
+        "[gpo] {} SYSVOL GPO(s) bridged to a SID via dn_sid",
+        by_sid.len()
+    );
     for (sid, g) in &by_sid {
         log::debug!("[gpo]   {} -> {}", g.guid, sid);
     }
@@ -432,16 +489,34 @@ pub fn apply_gpo(
     for ou in ous.iter_mut() {
         let label = ou.properties().distinguishedname().clone();
         let links: Vec<Link> = ou.get_links().to_vec();
-        fill_container("OU", &label, &links, ou.gpo_changes_mut(), &by_sid, &resolver, &mut priv_acc);
+        fill_container(
+            "OU",
+            &label,
+            &links,
+            ou.gpo_changes_mut(),
+            &by_sid,
+            &resolver,
+            &mut priv_acc,
+        );
     }
     for dom in domains.iter_mut() {
         let label = dom.properties().distinguishedname().clone();
         let links: Vec<Link> = dom.get_links().to_vec();
-        fill_container("Domain", &label, &links, dom.gpo_changes_mut(), &by_sid, &resolver, &mut priv_acc);
+        fill_container(
+            "Domain",
+            &label,
+            &links,
+            dom.gpo_changes_mut(),
+            &by_sid,
+            &resolver,
+            &mut priv_acc,
+        );
     }
 
     for c in computers.iter_mut() {
-        let Some(per) = priv_acc.get(c.object_identifier()) else { continue };
+        let Some(per) = priv_acc.get(c.object_identifier()) else {
+            continue;
+        };
         let ur = c.users_rights_mut();
         for (privilege, members) in per {
             let mut right = UserRight::new();
@@ -450,9 +525,12 @@ pub fn apply_gpo(
             *right.collected_mut() = true;
             ur.push(right);
         }
-        log::trace!("[gpo] Computer {}: {} UserRight(s) set", c.object_identifier(), per.len());
+        log::trace!(
+            "[gpo] Computer {}: {} UserRight(s) set",
+            c.object_identifier(),
+            per.len()
+        );
     }
-    
 }
 
 fn fill_container(
@@ -498,7 +576,6 @@ fn fill_container(
         merged.psremote_users.len(),
     );
 
-
     // Privileges -> accumulate onto the computers the checker already resolved.
     let privs = resolve_privileges(&ordered, resolver);
     if privs.is_empty() {
@@ -506,7 +583,8 @@ fn fill_container(
     }
     log::debug!(
         "[gpo] {kind} {label}: {} privilege(s) resolved, {} affected computer(s)",
-        privs.len(), changes.affected_computers().len()
+        privs.len(),
+        changes.affected_computers().len()
     );
     for m in changes.affected_computers() {
         let per = priv_acc.entry(m.object_identifier().clone()).or_default();
@@ -544,7 +622,11 @@ mod tests {
         }
     }
 
-    fn gpo_with_restricted(target: &str, op: RestrictedGroupOperation, principals: &[&str]) -> SysvolGpo {
+    fn gpo_with_restricted(
+        target: &str,
+        op: RestrictedGroupOperation,
+        principals: &[&str],
+    ) -> SysvolGpo {
         let mut g = SysvolGpo::default();
         g.guid = "{G}".into();
         g.restricted_groups = vec![RestrictedGroupDirective::new(

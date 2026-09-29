@@ -1,20 +1,20 @@
-use serde_json::value::Value;
-use serde::{Deserialize, Serialize};
 use colored::Colorize;
 use ldap3::SearchEntry;
-use log::{info, debug, trace};
+use log::{debug, info, trace};
+use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::enums::regex::OBJECT_SID_RE1;
-use crate::objects::common::{LdapObject, GPOChange, Link, AceTemplate, SPNTarget, Member};
-use crate::objects::trust::Trust;
-use crate::utils::date::{span_to_string, string_to_epoch};
 use crate::enums::acl::parse_ntsecuritydescriptor;
 use crate::enums::forestlevel::get_forest_level;
 use crate::enums::gplink::parse_gplink;
+use crate::enums::regex::OBJECT_SID_RE1;
 use crate::enums::secdesc::LdapSid;
 use crate::enums::sid::sid_maker;
+use crate::objects::common::{AceTemplate, GPOChange, LdapObject, Link, Member, SPNTarget};
+use crate::objects::trust::Trust;
+use crate::utils::date::{span_to_string, string_to_epoch};
 
 /// Domain structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -44,7 +44,9 @@ pub struct Domain {
 impl Domain {
     // New domain.
     pub fn new() -> Self {
-        Self { ..Default::default() }
+        Self {
+            ..Default::default()
+        }
     }
 
     // Get access.
@@ -120,7 +122,7 @@ impl Domain {
                 }
                 "msDS-Behavior-Version" => {
                     let level = get_forest_level(value[0].to_string());
-                    self.properties.functionallevel  = level;
+                    self.properties.functionallevel = level;
                 }
                 "whenCreated" => {
                     let epoch = string_to_epoch(&value[0])?;
@@ -139,7 +141,10 @@ impl Domain {
                     let machine_account_quota = value[0].parse::<i32>().unwrap_or(0);
                     self.properties.machineaccountquota = machine_account_quota;
                     if machine_account_quota > 0 {
-                        info!("MachineAccountQuota: {}", machine_account_quota.to_string().yellow().bold());
+                        info!(
+                            "MachineAccountQuota: {}",
+                            machine_account_quota.to_string().yellow().bold()
+                        );
                     }
                 }
                 "isDeleted" => {
@@ -165,13 +170,16 @@ impl Domain {
                     self.properties.lockoutthreshold = value[0].parse::<i32>().unwrap_or(0);
                 }
                 "minPwdAge" => {
-                    self.properties.minpwdage = span_to_string(value[0].parse::<i64>().unwrap_or(0));
+                    self.properties.minpwdage =
+                        span_to_string(value[0].parse::<i64>().unwrap_or(0));
                 }
                 "maxPwdAge" => {
-                    self.properties.maxpwdage = span_to_string(value[0].parse::<i64>().unwrap_or(0));
+                    self.properties.maxpwdage =
+                        span_to_string(value[0].parse::<i64>().unwrap_or(0));
                 }
                 "lockoutDuration" => {
-                    self.properties.lockoutduration = span_to_string(value[0].parse::<i64>().unwrap_or(0));
+                    self.properties.lockoutduration =
+                        span_to_string(value[0].parse::<i64>().unwrap_or(0));
                 }
                 "lockOutObservationWindow" => {
                     self.properties.lockoutobservationwindow = value[0].parse::<i64>().unwrap_or(0);
@@ -215,14 +223,11 @@ impl Domain {
 
         // Push DN and SID in HashMap
         dn_sid.insert(
-        self.properties.distinguishedname.to_string(),
-        self.object_identifier.to_string()
+            self.properties.distinguishedname.to_string(),
+            self.object_identifier.to_string(),
         );
         // Push DN and Type
-        sid_type.insert(
-            self.object_identifier.to_string(),
-            "Domain".to_string(),
-        );
+        sid_type.insert(self.object_identifier.to_string(), "Domain".to_string());
 
         // Trace and return Domain struct
         // trace!("JSON OUTPUT: {:?}",serde_json::to_string(&self).unwrap());
@@ -246,8 +251,12 @@ impl LdapObject for Domain {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
     fn get_links(&self) -> &Vec<Link> {
         &self.links
     }
@@ -320,7 +329,7 @@ pub struct DomainProperties {
     lockoutobservationwindow: i64,
     functionallevel: String,
     dsheuristics: String,
-    collected: bool
+    collected: bool,
 }
 
 impl DomainProperties {
@@ -331,10 +340,10 @@ impl DomainProperties {
 
     // Mutable access.
     pub fn domain_mut(&mut self) -> &mut String {
-       &mut self.domain
+        &mut self.domain
     }
     pub fn name_mut(&mut self) -> &mut String {
-       &mut self.name
+        &mut self.name
     }
     pub fn highvalue_mut(&mut self) -> &mut bool {
         &mut self.highvalue
@@ -374,6 +383,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(domain.properties.dsheuristics, "0000000001000001");
-        assert_eq!(domain.to_json()["Properties"]["dsheuristics"], "0000000001000001");
+        assert_eq!(
+            domain.to_json()["Properties"]["dsheuristics"],
+            "0000000001000001"
+        );
     }
 }

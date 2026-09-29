@@ -18,10 +18,10 @@ use ldap3::adapters::{Adapter, EntriesOnly};
 use ldap3::exop::WhoAmI;
 use ldap3::{adapters::PagedResults, controls::RawControl, LdapConnAsync, LdapConnSettings};
 use ldap3::{Scope, SearchEntry};
-use log::{info, debug, error, trace};
-use std::io::{self, Write, stdin};
+use log::{debug, error, info, trace};
 use std::collections::HashMap;
 use std::error::Error;
+use std::io::{self, stdin, Write};
 
 /// Connect to the Domain Controller and authenticate, returning a ready
 /// `ldap3::Ldap` session. The method is chosen from `options`:
@@ -47,11 +47,16 @@ pub async fn ldap_auth(options: &Options) -> Result<ldap3::Ldap, Box<dyn Error>>
         let (conn, mut ldap) = LdapConnAsync::with_settings(consettings, &s_url).await?;
         ldap3::drive!(conn);
         debug!("NTLM SSPI (current Windows session)");
-        ldap.sasl_ntlm_bind("", "")
-            .await?
-            .success()
-            .map_err(|e| format!("SSPI authentication to {} failed: {e}", domain.to_uppercase()))?;
-        info!("Connected to {} Active Directory via SSPI!", domain.to_uppercase().bold().green());
+        ldap.sasl_ntlm_bind("", "").await?.success().map_err(|e| {
+            format!(
+                "SSPI authentication to {} failed: {e}",
+                domain.to_uppercase()
+            )
+        })?;
+        info!(
+            "Connected to {} Active Directory via SSPI!",
+            domain.to_uppercase().bold().green()
+        );
         return Ok(ldap);
     }
 
@@ -136,15 +141,26 @@ pub async fn ldap_auth(options: &Options) -> Result<ldap3::Ldap, Box<dyn Error>>
         ldap.sasl_ntlm_bind(&ldap_args.s_username, ntlm_password)
             .await?
             .success()
-            .map_err(|e| format!("NTLM authentication to {} failed: {e}", domain.to_uppercase()))?;
-        info!("Connected to {} Active Directory via NTLM!", domain.to_uppercase().bold().green());
+            .map_err(|e| {
+                format!(
+                    "NTLM authentication to {} failed: {e}",
+                    domain.to_uppercase()
+                )
+            })?;
+        info!(
+            "Connected to {} Active Directory via NTLM!",
+            domain.to_uppercase().bold().green()
+        );
     } else if !options.kerberos {
         debug!("Simple bind (username:password)");
         ldap.simple_bind(&ldap_args.s_username, &ldap_args.s_password)
             .await?
             .success()
             .map_err(|e| format!("authentication to {} failed: {e}", domain.to_uppercase()))?;
-        info!("Connected to {} Active Directory!", domain.to_uppercase().bold().green());
+        info!(
+            "Connected to {} Active Directory!",
+            domain.to_uppercase().bold().green()
+        );
     } else {
         debug!("Kerberos (sasl_gssapi_bind)");
         let fqdn = options
@@ -181,7 +197,9 @@ pub(crate) async fn collect_from_ldap_into<S: Storage<LdapSearchEntry>>(
     trace!("naming_contexts: {:?}", &res);
 
     if !res.iter().any(|s| s.contains("Configuration")) {
-        return Err("no Configuration namingContext found (is the target a Domain Controller?)".into());
+        return Err(
+            "no Configuration namingContext found (is the target a Domain Controller?)".into(),
+        );
     }
 
     for cn in &res {
@@ -276,10 +294,16 @@ fn ldap_constructor(
     if username.is_none() && !kerberos && !use_cert {
         print!("Username: ");
         io::stdout().flush()?;
-        stdin().read_line(&mut s).expect("Did not enter a correct username");
+        stdin()
+            .read_line(&mut s)
+            .expect("Did not enter a correct username");
         io::stdout().flush()?;
-        if let Some('\n') = s.chars().next_back() { s.pop(); }
-        if let Some('\r') = s.chars().next_back() { s.pop(); }
+        if let Some('\n') = s.chars().next_back() {
+            s.pop();
+        }
+        if let Some('\r') = s.chars().next_back() {
+            s.pop();
+        }
         _s_username = s.to_owned();
     } else {
         _s_username = username.unwrap_or("not set").to_owned();
@@ -332,7 +356,13 @@ fn ldap_constructor(
     }
 
     debug!("IP: {}", ip.unwrap_or("not set"));
-    debug!("PORT: {}", match port { Some(p) => p.to_string(), None => "not set".to_owned() });
+    debug!(
+        "PORT: {}",
+        match port {
+            Some(p) => p.to_string(),
+            None => "not set".to_owned(),
+        }
+    );
     debug!("FQDN: {}", ldapfqdn.unwrap_or("not set"));
     debug!("Url: {}", s_url);
     debug!("Domain: {}", domain);
@@ -352,7 +382,11 @@ fn ldap_constructor(
         s_url: s_url.to_string(),
         _s_dc: s_dc,
         _s_email: s_email.to_string().to_lowercase(),
-        s_username: if use_ntlm { _s_username.to_string() } else { s_email.to_string().to_lowercase() },
+        s_username: if use_ntlm {
+            _s_username.to_string()
+        } else {
+            s_email.to_string().to_lowercase()
+        },
         s_password: _s_password.to_string(),
         s_ntlm_password,
     })
@@ -378,8 +412,15 @@ fn nt_hash_to_ntlm_password(hex_hash: &str) -> String {
 
 /// Function to prepare LDAP url.
 fn prepare_ldap_url(ldaps: bool, ip: Option<&str>, port: Option<u16>, domain: &str) -> String {
-    let protocol = if ldaps || port.unwrap_or(0) == 636 { "ldaps" } else { "ldap" };
-    let target = match ip { Some(ip) => ip, None => domain };
+    let protocol = if ldaps || port.unwrap_or(0) == 636 {
+        "ldaps"
+    } else {
+        "ldap"
+    };
+    let target = match ip {
+        Some(ip) => ip,
+        None => domain,
+    };
     match port {
         Some(port) => format!("{protocol}://{target}:{port}"),
         None => format!("{protocol}://{target}"),
@@ -411,24 +452,36 @@ async fn gssapi_connection(
     ldap.sasl_gssapi_bind(ldapfqdn)
         .await?
         .success()
-        .map_err(|e| format!("Kerberos authentication to {} failed: {e}", domain.to_uppercase()))?;
-    info!("Connected to {} Active Directory!", domain.to_uppercase().bold().green());
+        .map_err(|e| {
+            format!(
+                "Kerberos authentication to {} failed: {e}",
+                domain.to_uppercase()
+            )
+        })?;
+    info!(
+        "Connected to {} Active Directory!",
+        domain.to_uppercase().bold().green()
+    );
     Ok(())
 }
 
 /// Get all namingContext for DC
-pub async fn get_all_naming_contexts(ldap: &mut ldap3::Ldap) -> Result<Vec<String>, Box<dyn Error>> {
+pub async fn get_all_naming_contexts(
+    ldap: &mut ldap3::Ldap,
+) -> Result<Vec<String>, Box<dyn Error>> {
     let adapters: Vec<Box<dyn Adapter<_, _>>> = vec![
         Box::new(EntriesOnly::new()),
         Box::new(PagedResults::new(999)),
     ];
-    let mut search = ldap.streaming_search_with(
-        adapters,
-        "",
-        Scope::Base,
-        "(objectClass=*)",
-        vec!["namingContexts"],
-    ).await?;
+    let mut search = ldap
+        .streaming_search_with(
+            adapters,
+            "",
+            Scope::Base,
+            "(objectClass=*)",
+            vec!["namingContexts"],
+        )
+        .await?;
 
     let mut rs: Vec<SearchEntry> = Vec::new();
     while let Some(entry) = search.next().await? {
@@ -449,10 +502,15 @@ pub async fn get_all_naming_contexts(ldap: &mut ldap3::Ldap) -> Result<Vec<Strin
                 }
             }
             naming_contexts.sort_by_key(|cn| {
-                if cn.contains("CN=Schema") { 0 }
-                else if cn.to_lowercase().starts_with("dc=") { 1 }
-                else if cn.contains("CN=Configuration") { 2 }
-                else { 3 }
+                if cn.contains("CN=Schema") {
+                    0
+                } else if cn.to_lowercase().starts_with("dc=") {
+                    1
+                } else if cn.contains("CN=Configuration") {
+                    2
+                } else {
+                    3
+                }
             });
             for (i, nc) in naming_contexts.iter().enumerate() {
                 trace!("NamingContext order [{}]: {}", i, nc);
@@ -476,13 +534,21 @@ pub struct LdapSearchEntry {
 
 impl From<SearchEntry> for LdapSearchEntry {
     fn from(entry: SearchEntry) -> Self {
-        LdapSearchEntry { dn: entry.dn, attrs: entry.attrs, bin_attrs: entry.bin_attrs }
+        LdapSearchEntry {
+            dn: entry.dn,
+            attrs: entry.attrs,
+            bin_attrs: entry.bin_attrs,
+        }
     }
 }
 
 impl From<LdapSearchEntry> for SearchEntry {
     fn from(entry: LdapSearchEntry) -> Self {
-        SearchEntry { dn: entry.dn, attrs: entry.attrs, bin_attrs: entry.bin_attrs }
+        SearchEntry {
+            dn: entry.dn,
+            attrs: entry.attrs,
+            bin_attrs: entry.bin_attrs,
+        }
     }
 }
 
@@ -494,7 +560,10 @@ mod tests {
     fn nt_hash_encoding_roundtrip() {
         let hash = "aad3b435b51404eeaad3b435b51404ee";
         let password = nt_hash_to_ntlm_password(hash);
-        let utf16_bytes: Vec<u8> = password.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+        let utf16_bytes: Vec<u8> = password
+            .encode_utf16()
+            .flat_map(|u| u.to_le_bytes())
+            .collect();
         assert!(utf16_bytes.len() > 512);
         let hash_portion = &utf16_bytes[..utf16_bytes.len() - 512];
         assert_eq!(hash_portion.len(), 32);
@@ -505,7 +574,10 @@ mod tests {
     fn nt_hash_encoding_all_zeros() {
         let hash = "00000000000000000000000000000000";
         let password = nt_hash_to_ntlm_password(hash);
-        let utf16_bytes: Vec<u8> = password.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+        let utf16_bytes: Vec<u8> = password
+            .encode_utf16()
+            .flat_map(|u| u.to_le_bytes())
+            .collect();
         assert!(utf16_bytes.len() > 512);
         let hash_portion = &utf16_bytes[..utf16_bytes.len() - 512];
         assert_eq!(hash_portion, b"00000000000000000000000000000000");
@@ -515,7 +587,10 @@ mod tests {
     fn nt_hash_encoding_all_f() {
         let hash = "ffffffffffffffffffffffffffffffff";
         let password = nt_hash_to_ntlm_password(hash);
-        let utf16_bytes: Vec<u8> = password.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+        let utf16_bytes: Vec<u8> = password
+            .encode_utf16()
+            .flat_map(|u| u.to_le_bytes())
+            .collect();
         assert!(utf16_bytes.len() > 512);
         let hash_portion = &utf16_bytes[..utf16_bytes.len() - 512];
         assert_eq!(hash_portion, b"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");

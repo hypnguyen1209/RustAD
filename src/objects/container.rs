@@ -1,15 +1,14 @@
-use serde_json::value::Value;
-use serde::{Deserialize, Serialize};
 use ldap3::SearchEntry;
 use log::{debug, trace};
+use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::objects::common::{LdapObject, AceTemplate, SPNTarget, Link, Member};
 use crate::enums::acl::parse_ntsecuritydescriptor;
 use crate::enums::sid::decode_guid_le;
+use crate::objects::common::{AceTemplate, LdapObject, Link, Member, SPNTarget};
 use crate::utils::date::string_to_epoch;
-
 
 /// Container structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -28,12 +27,14 @@ pub struct Container {
     is_acl_protected: bool,
     #[serde(rename = "ContainedBy")]
     contained_by: Option<Member>,
-    }
+}
 
 impl Container {
     // New container.
     pub fn new() -> Self {
-        Self { ..Default::default() }
+        Self {
+            ..Default::default()
+        }
     }
 
     /// Function to parse and replace value for Container object.
@@ -72,7 +73,7 @@ impl Container {
             match key.as_str() {
                 "name" => {
                     let name = &value[0];
-                    let email = format!("{}@{}",name.to_owned(),domain);
+                    let email = format!("{}@{}", name.to_owned(), domain);
                     self.properties.name = email.to_uppercase();
                 }
                 "description" => {
@@ -117,13 +118,10 @@ impl Container {
         // Push DN and SID in HashMap
         dn_sid.insert(
             self.properties.distinguishedname.to_string(),
-            self.object_identifier.to_string()
+            self.object_identifier.to_string(),
         );
         // Push DN and Type
-        sid_type.insert(
-            self.object_identifier.to_string(),
-            "Container".to_string(),
-        );
+        sid_type.insert(self.object_identifier.to_string(), "Container".to_string());
 
         // Trace and return Contaier struct
         // trace!("JSON OUTPUT: {:?}",serde_json::to_string(&self).unwrap());
@@ -134,14 +132,14 @@ impl Container {
 /// Default FSP properties structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ContainerProperties {
-   domain: String,
-   name: String,
-   distinguishedname: String,
-   domainsid: String,
-   isaclprotected: bool,
-   highvalue: bool,
-   description: Option<String>,
-   whencreated: i64,
+    domain: String,
+    name: String,
+    distinguishedname: String,
+    domainsid: String,
+    isaclprotected: bool,
+    highvalue: bool,
+    description: Option<String>,
+    whencreated: i64,
 }
 
 impl LdapObject for Container {
@@ -160,9 +158,15 @@ impl LdapObject for Container {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
-    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
+    fn get_links(&self) -> &Vec<Link> {
+        &crate::objects::common::EMPTY_VEC_LINK
+    }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }

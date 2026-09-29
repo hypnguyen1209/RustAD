@@ -1,4 +1,4 @@
-use super::rules::{self, Severity, ContentMatch};
+use super::rules::{self, ContentMatch, Severity};
 
 #[derive(Debug, Clone)]
 pub struct ScanFinding {
@@ -47,7 +47,9 @@ pub fn classify_file_name(filename: &str) -> Option<(Severity, &'static str)> {
 pub fn scan_file(file_path: &str, content: Option<&str>) -> Vec<ScanFinding> {
     let mut findings = Vec::new();
 
-    let filename = file_path.rsplit('/').next()
+    let filename = file_path
+        .rsplit('/')
+        .next()
         .or_else(|| file_path.rsplit('\\').next())
         .unwrap_or(file_path);
 
@@ -87,14 +89,17 @@ fn redact_secret(matched: &str) -> String {
         format!("{}[REDACTED]", prefix)
     } else if matched.starts_with("-----BEGIN") {
         "-----BEGIN PRIVATE KEY [REDACTED]-----".to_string()
-    } else if matched.starts_with("AKIA") || matched.starts_with("AGPA")
-        || matched.starts_with("AROA") || matched.starts_with("ASIA")
+    } else if matched.starts_with("AKIA")
+        || matched.starts_with("AGPA")
+        || matched.starts_with("AROA")
+        || matched.starts_with("ASIA")
     {
         format!("{}...[REDACTED]", &matched[..4.min(matched.len())])
     } else if matched.starts_with("xox") {
         "xox...[REDACTED]".to_string()
     } else {
-        let safe_end = matched.char_indices()
+        let safe_end = matched
+            .char_indices()
             .nth(20)
             .map(|(i, _)| i)
             .unwrap_or(matched.len());
@@ -103,14 +108,16 @@ fn redact_secret(matched: &str) -> String {
 }
 
 pub fn print_findings(findings: &[ScanFinding]) {
-    if findings.is_empty() { return; }
+    if findings.is_empty() {
+        return;
+    }
     println!("--- Sensitive File Findings ({}) ---", findings.len());
     for f in findings {
-        let line_info = f.line_number
-            .map(|l| format!(":{}", l))
-            .unwrap_or_default();
-        println!("  [{}] {} — {} ({}{})",
-            f.severity, f.rule_name, f.description, f.file_path, line_info);
+        let line_info = f.line_number.map(|l| format!(":{}", l)).unwrap_or_default();
+        println!(
+            "  [{}] {} — {} ({}{})",
+            f.severity, f.rule_name, f.description, f.file_path, line_info
+        );
         if !f.matched_text.is_empty() {
             println!("    Match: {}", f.matched_text);
         }

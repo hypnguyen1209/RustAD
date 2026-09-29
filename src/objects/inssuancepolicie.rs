@@ -1,13 +1,13 @@
-use serde_json::value::Value;
-use serde::{Deserialize, Serialize};
 use ldap3::SearchEntry;
 use log::{debug, trace};
+use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::error::Error;
 
 use crate::enums::{decode_guid_le, parse_ntsecuritydescriptor};
+use crate::objects::common::{AceTemplate, LdapObject, Link, Member, SPNTarget};
 use crate::utils::date::string_to_epoch;
-use crate::objects::common::{LdapObject, AceTemplate, SPNTarget, Link, Member};
 
 /// IssuancePolicie structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -30,15 +30,15 @@ pub struct IssuancePolicie {
 
 impl IssuancePolicie {
     // New IssuancePolicie
-    pub fn new() -> Self { 
+    pub fn new() -> Self {
         Self {
-            ..Default::default() 
-        } 
+            ..Default::default()
+        }
     }
 
     /// Function to parse and replace value in json template for IssuancePolicie object.
     pub fn parse(
-         &mut self,
+        &mut self,
         result: SearchEntry,
         domain: &str,
         dn_sid: &mut HashMap<String, String>,
@@ -64,7 +64,7 @@ impl IssuancePolicie {
 
         // Change all values...
         self.properties.domain = domain.to_uppercase();
-        self.properties.distinguishedname = result_dn;    
+        self.properties.distinguishedname = result_dn;
         self.properties.domainsid = domain_sid.to_string();
 
         // With a check
@@ -83,7 +83,7 @@ impl IssuancePolicie {
                     self.is_deleted = true;
                 }
                 "displayName" => {
-                    self.properties.name = format!("{}@{}",&value[0],domain).to_uppercase();
+                    self.properties.name = format!("{}@{}", &value[0], domain).to_uppercase();
                     self.properties.displayname = value[0].to_owned();
                 }
                 "msPKI-Cert-Template-OID" => {
@@ -105,12 +105,12 @@ impl IssuancePolicie {
                     // nTSecurityDescriptor raw to string
                     let relations_ace = parse_ntsecuritydescriptor(
                         self,
-                         &value[0],
+                        &value[0],
                         "IssuancePolicie",
-                         &result_attrs,
-                         &result_bin,
-                         domain,
-                         schema_guid_map,
+                        &result_attrs,
+                        &result_bin,
+                        domain,
+                        schema_guid_map,
                     );
                     self.aces = relations_ace;
                 }
@@ -122,12 +122,12 @@ impl IssuancePolicie {
         if self.object_identifier != "SID" {
             dn_sid.insert(
                 self.properties.distinguishedname.to_owned(),
-                self.object_identifier.to_owned()
+                self.object_identifier.to_owned(),
             );
             // Push DN and Type
             sid_type.insert(
                 self.object_identifier.to_owned(),
-                "IssuancePolicie".to_string()
+                "IssuancePolicie".to_string(),
             );
         }
 
@@ -145,28 +145,36 @@ impl LdapObject for IssuancePolicie {
 
     // Get values
     fn get_object_identifier(&self) -> &String {
-         &self.object_identifier
+        &self.object_identifier
     }
     fn get_is_acl_protected(&self) -> &bool {
-         &self.is_acl_protected
+        &self.is_acl_protected
     }
     fn get_aces(&self) -> &Vec<AceTemplate> {
-         &self.aces
+        &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
-    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
+    fn get_links(&self) -> &Vec<Link> {
+        &crate::objects::common::EMPTY_VEC_LINK
+    }
     fn get_contained_by(&self) -> &Option<Member> {
-         &self.contained_by
+        &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_child_objects(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
     fn get_haslaps(&self) -> &bool {
-         &false
+        &false
     }
-    
+
     // Get mutable values
     fn get_aces_mut(&mut self) -> &mut Vec<AceTemplate> {
-         &mut self.aces
+        &mut self.aces
     }
     fn get_spntargets_mut(&mut self) -> &mut Vec<SPNTarget> {
         panic!("Not used by current object.");
@@ -174,7 +182,7 @@ impl LdapObject for IssuancePolicie {
     fn get_allowed_to_delegate_mut(&mut self) -> &mut Vec<Member> {
         panic!("Not used by current object.");
     }
-    
+
     // Edit values
     fn set_is_acl_protected(&mut self, is_acl_protected: bool) {
         self.is_acl_protected = is_acl_protected;
@@ -199,7 +207,6 @@ impl LdapObject for IssuancePolicie {
         // Not used by current object.
     }
 }
-
 
 // IssuancePolicie properties structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -241,7 +248,12 @@ pub struct GroupLink {
 
 impl GroupLink {
     // New object.
-    pub fn new(object_identifier: Option<String>, object_type: String) -> Self { Self { object_identifier, object_type } }
+    pub fn new(object_identifier: Option<String>, object_type: String) -> Self {
+        Self {
+            object_identifier,
+            object_type,
+        }
+    }
 
     // Immutable access.
     pub fn object_identifier(&self) -> &Option<String> {
@@ -250,7 +262,7 @@ impl GroupLink {
     pub fn object_type(&self) -> &String {
         &self.object_type
     }
- 
+
     // Mutable access.
     pub fn object_identifier_mut(&mut self) -> &mut Option<String> {
         &mut self.object_identifier

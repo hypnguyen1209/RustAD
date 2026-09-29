@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use ldap3::SearchEntry;
 use log::{debug, trace};
+use std::collections::HashMap;
 
 use crate::enums::decode_guid_le;
 
@@ -18,7 +18,6 @@ impl Schema {
         result: SearchEntry,
         schema_guid_map: &mut HashMap<String, String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        
         let result_dn: String = result.dn.to_uppercase();
         let result_attrs: HashMap<String, Vec<String>> = result.attrs;
         let result_bin: HashMap<String, Vec<Vec<u8>>> = result.bin_attrs;
@@ -36,17 +35,20 @@ impl Schema {
         }
 
         // Only get name:schemaIDGUID
-        if let (Some(names), Some(guids)) = (
-            result_attrs.get("name"),
-            result_bin.get("schemaIDGUID"),
-        ) {
+        if let (Some(names), Some(guids)) =
+            (result_attrs.get("name"), result_bin.get("schemaIDGUID"))
+        {
             if let (Some(name), Some(guid_bytes)) = (names.first(), guids.first()) {
                 let guid = decode_guid_le(guid_bytes);
-                trace!("Parse Schema object .to_lowercase(): {}:{}", name.to_lowercase(), guid.to_lowercase());
+                trace!(
+                    "Parse Schema object .to_lowercase(): {}:{}",
+                    name.to_lowercase(),
+                    guid.to_lowercase()
+                );
                 schema_guid_map.insert(name.to_lowercase(), guid.to_lowercase());
             }
         }
-        
+
         Ok(())
     }
 }

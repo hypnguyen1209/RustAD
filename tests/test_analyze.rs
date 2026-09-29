@@ -1,8 +1,8 @@
-use rustad::analyze::graph::{AdGraph, AdNode, AdEdge, NodeProps, build_graph};
+use petgraph::graph::DiGraph;
 use rustad::analyze::checks::*;
+use rustad::analyze::graph::{build_graph, AdEdge, AdGraph, AdNode, NodeProps};
 use rustad::analyze::*;
 use rustad::api::ADResults;
-use petgraph::graph::DiGraph;
 use std::collections::HashMap;
 
 fn empty_graph() -> AdGraph {

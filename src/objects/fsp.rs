@@ -1,15 +1,15 @@
-use serde_json::value::Value;
-use serde::{Deserialize, Serialize};
 use ldap3::SearchEntry;
 use log::{debug, trace};
+use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::error::Error;
 
 use crate::enums::regex::OBJECT_SID_RE1;
-use crate::objects::common::{LdapObject, AceTemplate, SPNTarget, Link, Member};
-use crate::utils::date::string_to_epoch;
 use crate::enums::secdesc::LdapSid;
 use crate::enums::sid::{objectsid_to_vec8, sid_maker};
+use crate::objects::common::{AceTemplate, LdapObject, Link, Member, SPNTarget};
+use crate::utils::date::string_to_epoch;
 
 /// FSP (ForeignSecurityPrincipal) structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -31,7 +31,9 @@ pub struct Fsp {
 impl Fsp {
     // New FSP
     pub fn new() -> Self {
-        Self { ..Default::default() }
+        Self {
+            ..Default::default()
+        }
     }
 
     /// Function to parse and replace value in json template for ForeignSecurityPrincipal object.
@@ -41,7 +43,7 @@ impl Fsp {
         domain: &str,
         dn_sid: &mut HashMap<String, String>,
         sid_type: &mut HashMap<String, String>,
-        domain_sid: &str
+        domain_sid: &str,
     ) -> Result<(), Box<dyn Error>> {
         let result_dn: String = result.dn.to_uppercase();
         let result_attrs: HashMap<String, Vec<String>> = result.attrs;
@@ -114,7 +116,7 @@ impl Fsp {
         if self.object_identifier != "SID" {
             dn_sid.insert(
                 self.properties.distinguishedname.to_string(),
-                self.object_identifier.to_string()
+                self.object_identifier.to_string(),
             );
             // Push DN and Type
             sid_type.insert(self.object_identifier.to_string(), ftype.to_string());
@@ -129,70 +131,71 @@ impl Fsp {
 /// Default FSP properties structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct FspProperties {
-   domain: String,
-   name: String,
-   distinguishedname: String,
-   domainsid: String,
-   isaclprotected: bool,
-   highvalue: bool,
-   description: Option<String>,
-   whencreated: i64,
+    domain: String,
+    name: String,
+    distinguishedname: String,
+    domainsid: String,
+    isaclprotected: bool,
+    highvalue: bool,
+    description: Option<String>,
+    whencreated: i64,
 }
 
 impl FspProperties {
-   // New default properties.
-   pub fn new(domain: String) -> Self {
-      Self {
-         domain,
-         whencreated: -1,
-         ..Default::default() }
-   }
+    // New default properties.
+    pub fn new(domain: String) -> Self {
+        Self {
+            domain,
+            whencreated: -1,
+            ..Default::default()
+        }
+    }
 
-   // Immutable access.
-   pub fn domain(&self) -> &String {
-      &self.domain
-   }
-   pub fn name(&self) -> &String {
-      &self.name
-   }
-   pub fn distinguishedname(&self) -> &String {
-      &self.distinguishedname
-   }
-   pub fn domainsid(&self) -> &String {
-      &self.domainsid
-   }
-   pub fn highvalue(&self) -> &bool {
-      &self.highvalue
-   }
-   pub fn description(&self) -> &Option<String> {
-      &self.description
-   }
-   pub fn whencreated(&self) -> &i64 {
-      &self.whencreated
-   }
+    // Immutable access.
+    pub fn domain(&self) -> &String {
+        &self.domain
+    }
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+    pub fn distinguishedname(&self) -> &String {
+        &self.distinguishedname
+    }
+    pub fn domainsid(&self) -> &String {
+        &self.domainsid
+    }
+    pub fn highvalue(&self) -> &bool {
+        &self.highvalue
+    }
+    pub fn description(&self) -> &Option<String> {
+        &self.description
+    }
+    pub fn whencreated(&self) -> &i64 {
+        &self.whencreated
+    }
 
-   // Mutable access.
-   pub fn domain_mut(&mut self) -> &mut String {
-      &mut self.domain
-   }
-   pub fn name_mut(&mut self) -> &mut String {
-      &mut self.name
-   }
-   pub fn distinguishedname_mut(&mut self) -> &mut String {
-      &mut self.distinguishedname
-   }
-   pub fn domainsid_mut(&mut self) -> &mut String {
-      &mut self.domainsid
-   }
-   pub fn highvalue_mut(&mut self) -> &mut bool {
-      &mut self.highvalue
-   }
-   pub fn description_mut(&mut self) -> &mut Option<String> {
-      &mut self.description
-   }
-   pub fn whencreated_mut(&mut self) -> &mut i64 {
-      &mut self.whencreated
-   }
+    // Mutable access.
+    pub fn domain_mut(&mut self) -> &mut String {
+        &mut self.domain
+    }
+    pub fn name_mut(&mut self) -> &mut String {
+        &mut self.name
+    }
+    pub fn distinguishedname_mut(&mut self) -> &mut String {
+        &mut self.distinguishedname
+    }
+    pub fn domainsid_mut(&mut self) -> &mut String {
+        &mut self.domainsid
+    }
+    pub fn highvalue_mut(&mut self) -> &mut bool {
+        &mut self.highvalue
+    }
+    pub fn description_mut(&mut self) -> &mut Option<String> {
+        &mut self.description
+    }
+    pub fn whencreated_mut(&mut self) -> &mut i64 {
+        &mut self.whencreated
+    }
 }
 
 impl LdapObject for Fsp {
@@ -211,13 +214,21 @@ impl LdapObject for Fsp {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
-    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> {
+        &crate::objects::common::EMPTY_VEC_SPNTARGET
+    }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
+    fn get_links(&self) -> &Vec<Link> {
+        &crate::objects::common::EMPTY_VEC_LINK
+    }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_child_objects(&self) -> &Vec<Member> {
+        &crate::objects::common::EMPTY_VEC_MEMBER
+    }
     fn get_haslaps(&self) -> &bool {
         &false
     }
