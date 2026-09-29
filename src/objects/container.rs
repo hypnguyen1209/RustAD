@@ -32,8 +32,8 @@ pub struct Container {
 
 impl Container {
     // New container.
-    pub fn new() -> Self { 
-        Self { ..Default::default() } 
+    pub fn new() -> Self {
+        Self { ..Default::default() }
     }
 
     /// Function to parse and replace value for Container object.
@@ -93,7 +93,6 @@ impl Container {
                 "objectGUID" => {
                     let guid = decode_guid_le(&value[0]);
                     self.object_identifier = guid.to_owned();
-                    self.properties.objectguid = guid;
                 }
                 "nTSecurityDescriptor" => {
                     // nTSecurityDescriptor raw to string
@@ -135,17 +134,14 @@ impl Container {
 /// Default FSP properties structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ContainerProperties {
-    domain: String,
-    name: String,
-    distinguishedname: String,
-    domainsid: String,
-    objectguid: String,
-    doesanyacegrantownerrights: bool,
-    doesanyinheritedacegrantownerrights: bool,
-    isaclprotected: bool,
-    highvalue: bool,
-    description: Option<String>,
-    whencreated: i64,
+   domain: String,
+   name: String,
+   distinguishedname: String,
+   domainsid: String,
+   isaclprotected: bool,
+   highvalue: bool,
+   description: Option<String>,
+   whencreated: i64,
 }
 
 impl LdapObject for Container {
@@ -164,15 +160,9 @@ impl LdapObject for Container {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> {
-        panic!("Not used by current object.");
-    }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
-    fn get_links(&self) -> &Vec<Link> {
-        panic!("Not used by current object.");
-    }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
@@ -182,7 +172,7 @@ impl LdapObject for Container {
     fn get_haslaps(&self) -> &bool {
         &false
     }
-    
+
     // Get mutable values
     fn get_aces_mut(&mut self) -> &mut Vec<AceTemplate> {
         &mut self.aces
@@ -193,7 +183,7 @@ impl LdapObject for Container {
     fn get_allowed_to_delegate_mut(&mut self) -> &mut Vec<Member> {
         panic!("Not used by current object.");
     }
-    
+
     // Edit values
     fn set_is_acl_protected(&mut self, is_acl_protected: bool) {
         self.is_acl_protected = is_acl_protected;
@@ -216,9 +206,5 @@ impl LdapObject for Container {
     }
     fn set_child_objects(&mut self, child_objects: Vec<Member>) {
         self.child_objects = child_objects
-    }
-    fn set_owner_rights_flags(&mut self, any: bool, any_inherited: bool) {
-        self.properties.doesanyacegrantownerrights = any;
-        self.properties.doesanyinheritedacegrantownerrights = any_inherited;
     }
 }

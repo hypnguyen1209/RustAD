@@ -5,7 +5,6 @@ use log::{debug, trace};
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::enums::{decode_guid_le, group_scope};
 use crate::enums::regex::OBJECT_SID_RE1;
 use crate::objects::common::{LdapObject, AceTemplate, SPNTarget, Link, Member};
 use crate::enums::acl::parse_ntsecuritydescriptor;
@@ -26,8 +25,6 @@ pub struct Group {
     properties: GroupProperties,
     #[serde(rename = "Members")]
     members: Vec<Member>,
-    #[serde(rename = "HasSIDHistory")]
-    has_sid_history: Vec<String>,
     #[serde(rename = "Aces")]
     aces: Vec<AceTemplate>,
     #[serde(rename = "ContainedBy")]
@@ -36,8 +33,8 @@ pub struct Group {
 
 impl Group {
     // New group.
-    pub fn new() -> Self { 
-        Self { ..Default::default() } 
+    pub fn new() -> Self {
+        Self { ..Default::default() }
     }
 
     // Immutable access.
@@ -45,7 +42,7 @@ impl Group {
         &self.members
     }
     pub fn properties(&self) -> &GroupProperties {
-        &self.properties 
+        &self.properties
     }
     pub fn object_identifier(&self) -> &String {
         &self.object_identifier
@@ -105,15 +102,12 @@ impl Group {
                     self.properties.description = Some(value[0].to_owned());
                 }
                 "adminCount" => {
-                    // adminCount is not limited to 1: any non-zero value means
-                    // the object is (or was) in a protected group, so
-                    // AdminSDHolder owns its DACL.
-                    let admincount = value[0].parse::<i32>().unwrap_or(0) != 0;
+                    let isadmin = &value[0];
+                    let mut admincount = false;
+                    if isadmin == "1" {
+                        admincount = true;
+                    }
                     self.properties.admincount = admincount;
-                    self.properties.adminsdholderprotected = admincount;
-                }
-                "groupType" => {
-                    self.properties.groupscope = group_scope(value[0].parse::<i64>().unwrap_or(0));
                 }
                 "sAMAccountName" => {
                     self.properties.samaccountname = value[0].to_owned();
@@ -135,7 +129,7 @@ impl Group {
                             *m.object_identifier_mut() = _member.to_uppercase();
                             _vec_members.push(m);
                         }
-                        
+
                         self.members = _vec_members;
                     }
                 }
@@ -145,23 +139,17 @@ impl Group {
                     let sid = sid_maker(LdapSid::parse(&vec_sid).unwrap().1, domain);
                     self.object_identifier = sid.to_owned();
 
-                    /*let re = Regex::new(r"^S-[0-9]{1}-[0-9]{1}-[0-9]{1,}-[0-9]{1,}-[0-9]{1,}-[0-9]{1,}").unwrap();
-                    for domain_sid in re.captures_iter(&sid) 
-                    {
-                        group_json["Properties"]["domainsid"] = domain_sid[0].to_owned().to_string();
-                    }*/
-
                     // highvalue
-                    if sid.ends_with("-512") 
-                        || sid.ends_with("-516") 
-                        || sid.ends_with("-519") 
-                        || sid.ends_with("-520") 
+                    if sid.ends_with("-512")
+                        || sid.ends_with("-516")
+                        || sid.ends_with("-519")
+                        || sid.ends_with("-520")
                     {
                         self.properties.highvalue = true;
-                    } else if sid.ends_with("S-1-5-32-544") 
-                        || sid.ends_with("S-1-5-32-548") 
+                    } else if sid.ends_with("S-1-5-32-544")
+                        || sid.ends_with("S-1-5-32-548")
                         || sid.ends_with("S-1-5-32-549")
-                        || sid.ends_with("S-1-5-32-550") 
+                        || sid.ends_with("S-1-5-32-550")
                         || sid.ends_with("S-1-5-32-551")
                     {
                         self.properties.highvalue = true;
@@ -185,11 +173,6 @@ impl Group {
         // For all, bins attributs
         for (key, value) in &result_bin {
             match key.as_str() {
-                "objectGUID" => {
-                    // objectGUID raw to string
-                    let guid = decode_guid_le(&value[0]);
-                    self.properties.objectguid = guid;
-                }
                 "objectSid" => {
                     // objectSid raw to string
                     let sid = sid_maker(LdapSid::parse(&value[0]).unwrap().1, domain);
@@ -198,20 +181,20 @@ impl Group {
                     for domain_sid in OBJECT_SID_RE1.captures_iter(&sid) {
                         self.properties.domainsid = domain_sid[0].to_owned().to_string();
                     }
-    
+
                     // highvalue
-                    if sid.ends_with("-512") 
-                        || sid.ends_with("-516") 
-                        || sid.ends_with("-519") 
-                        || sid.ends_with("-520") 
+                    if sid.ends_with("-512")
+                        || sid.ends_with("-516")
+                        || sid.ends_with("-519")
+                        || sid.ends_with("-520")
                     {
                         self.properties.highvalue = true;
                     }
-                    else if sid.ends_with("S-1-5-32-544") 
-                        || sid.ends_with("S-1-5-32-548") 
+                    else if sid.ends_with("S-1-5-32-544")
+                        || sid.ends_with("S-1-5-32-548")
                         || sid.ends_with("S-1-5-32-549")
-                        || sid.ends_with("S-1-5-32-550") 
-                        || sid.ends_with("S-1-5-32-551") 
+                        || sid.ends_with("S-1-5-32-550")
+                        || sid.ends_with("S-1-5-32-551")
                     {
                         self.properties.highvalue = true;
                     }
@@ -231,15 +214,6 @@ impl Group {
                         schema_guid_map,
                     );
                     self.aces = relations_ace;
-                }
-                "sIDHistory" => {
-                    let mut list_sid_history: Vec<String> = Vec::new();
-                    for bsid in value {
-                        debug!("sIDHistory: {:?}", &bsid);
-                        list_sid_history.push(sid_maker(LdapSid::parse(bsid).unwrap().1, domain));
-                    }
-                    self.properties.sidhistory = list_sid_history.clone();
-                    self.has_sid_history = list_sid_history;
                 }
                 _ => {}
             }
@@ -278,25 +252,17 @@ impl LdapObject for Group {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> {
-        panic!("Not used by current object.");
-    }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
-    fn get_links(&self) -> &Vec<Link> {
-        panic!("Not used by current object.");
-    }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
+    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
     fn get_haslaps(&self) -> &bool {
         &false
     }
-    
+
     // Get mutable values
     fn get_aces_mut(&mut self) -> &mut Vec<AceTemplate> {
         &mut self.aces
@@ -307,7 +273,7 @@ impl LdapObject for Group {
     fn get_allowed_to_delegate_mut(&mut self) -> &mut Vec<Member> {
         panic!("Not used by current object.");
     }
-    
+
     // Edit values
     fn set_is_acl_protected(&mut self, is_acl_protected: bool) {
         self.is_acl_protected = is_acl_protected;
@@ -331,10 +297,6 @@ impl LdapObject for Group {
     fn set_child_objects(&mut self, _child_objects: Vec<Member>) {
         // Not used by current object.
     }
-    fn set_owner_rights_flags(&mut self, any: bool, any_inherited: bool) {
-        self.properties.doesanyacegrantownerrights = any;
-        self.properties.doesanyinheritedacegrantownerrights = any_inherited;
-    }
 }
 
 // Group properties structure
@@ -344,18 +306,12 @@ pub struct GroupProperties {
     name: String,
     distinguishedname: String,
     domainsid: String,
-    objectguid: String,
-    doesanyacegrantownerrights: bool,
-    doesanyinheritedacegrantownerrights: bool,
     isaclprotected: bool,
     highvalue: bool,
     samaccountname: String,
     description: Option<String>,
     whencreated: i64,
     admincount: bool,
-    adminsdholderprotected: bool,
-    groupscope: String,
-    sidhistory: Vec<String>,
 }
 
 impl GroupProperties {
@@ -376,22 +332,5 @@ impl GroupProperties {
     }
     pub fn highvalue_mut(&mut self) -> &mut bool {
         &mut self.highvalue
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn group_type_maps_to_bloodhound_scope() {
-        // groupType is a signed 32-bit value; security groups carry 0x80000000.
-        assert_eq!(group_scope(-2147483646), "Global");      // security, global
-        assert_eq!(group_scope(-2147483643), "DomainLocal"); // security, builtin local
-        assert_eq!(group_scope(-2147483644), "DomainLocal"); // security, resource
-        assert_eq!(group_scope(-2147483640), "Universal");   // security, universal
-        assert_eq!(group_scope(2), "Global");                // distribution, global
-        assert_eq!(group_scope(8), "Universal");             // distribution, universal
-        assert_eq!(group_scope(0), "");
     }
 }

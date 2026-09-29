@@ -162,7 +162,7 @@ impl CertTemplate {
                 "objectGUID" => {
                     // objectGUID raw to string
                     let guid = decode_guid_le(&value[0]);
-                    self.properties.objectguid = guid;
+                    self.object_identifier = guid.to_owned();
                 }
                 "nTSecurityDescriptor" => {
                     // nTSecurityDescriptor raw to string
@@ -258,21 +258,13 @@ impl LdapObject for CertTemplate {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> {
-        panic!("Not used by current object.");
-    }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
-    fn get_links(&self) -> &Vec<Link> {
-        panic!("Not used by current object.");
-    }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
+    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
     fn get_haslaps(&self) -> &bool {
         &false
     }
@@ -311,49 +303,42 @@ impl LdapObject for CertTemplate {
     fn set_child_objects(&mut self, _child_objects: Vec<Member>) {
         // Not used by current object.
     }
-    fn set_owner_rights_flags(&mut self, any: bool, any_inherited: bool) {
-        self.properties.doesanyacegrantownerrights = any;
-        self.properties.doesanyinheritedacegrantownerrights = any_inherited;
-    }
 }
 
 
 // CertTemplate properties structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CertTemplateProperties {
-    domain: String,
-    name: String,
-    distinguishedname: String,
-    domainsid: String,
-    objectguid: String,
-    doesanyacegrantownerrights: bool,
-    doesanyinheritedacegrantownerrights: bool,
-    isaclprotected: bool,
-    description: Option<String>,
-    whencreated: i64,
-    validityperiod: String,
-    renewalperiod: String,
-    schemaversion: i64,
-    displayname: String,
-    oid: String,
-    enrollmentflag: String,
-    requiresmanagerapproval: bool,
-    nosecurityextension: bool,
-    certificatenameflag: String,
-    enrolleesuppliessubject: bool,
-    subjectaltrequireupn: bool,
-    subjectaltrequiredns: bool,
-    subjectaltrequiredomaindns: bool,
-    subjectaltrequireemail: bool,
-    subjectaltrequirespn: bool,
-    subjectrequireemail: bool,
-    ekus: Vec<String>,
-    certificateapplicationpolicy: Vec<String>,
-    authorizedsignatures: i64,
-    applicationpolicies: Vec<String>,
-    issuancepolicies: Vec<String>,
-    effectiveekus: Vec<String>,
-    authenticationenabled: bool,
+   domain: String,
+   name: String,
+   distinguishedname: String,
+   domainsid: String,
+   isaclprotected: bool,
+   description: Option<String>,
+   whencreated: i64,
+   validityperiod: String,
+   renewalperiod: String,
+   schemaversion: i64,
+   displayname: String,
+   oid: String,
+   enrollmentflag: String,
+   requiresmanagerapproval: bool,
+   nosecurityextension: bool,
+   certificatenameflag: String,
+   enrolleesuppliessubject: bool,
+   subjectaltrequireupn: bool,
+   subjectaltrequiredns: bool,
+   subjectaltrequiredomaindns: bool,
+   subjectaltrequireemail: bool,
+   subjectaltrequirespn: bool,
+   subjectrequireemail: bool,
+   ekus: Vec<String>,
+   certificateapplicationpolicy: Vec<String>,
+   authorizedsignatures: i64,
+   applicationpolicies: Vec<String>,
+   issuancepolicies: Vec<String>,
+   effectiveekus: Vec<String>,
+   authenticationenabled: bool,
 }
 
 impl Default for CertTemplateProperties {
@@ -363,9 +348,6 @@ impl Default for CertTemplateProperties {
             name: String::from(""),
             distinguishedname: String::from(""),
             domainsid: String::from(""),
-            objectguid: String::from(""),
-            doesanyacegrantownerrights: false,
-            doesanyinheritedacegrantownerrights: false,
             isaclprotected: false,
             description: None,
             whencreated: -1,

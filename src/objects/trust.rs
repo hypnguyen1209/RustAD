@@ -29,10 +29,10 @@ pub struct Trust {
 
 impl Trust {
    // New trust link for domain.
-    pub fn new() -> Self { 
+    pub fn new() -> Self {
       Self {
          ..Default::default()
-      } 
+      }
    }
 
    // Imutable access.
@@ -85,7 +85,7 @@ impl Trust {
             "trustDirection" => {
                   let trustdirection: u8 = value[0].parse::<u8>().unwrap_or(0);
                   // <https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/5026a939-44ba-47b2-99cf-386a9e674b04>
-                  self.trust_direction = match trustdirection { 
+                  self.trust_direction = match trustdirection {
                      1 => "Inbound",
                      2 => "Outbound",
                      3 => "Bidirectional",
@@ -110,7 +110,7 @@ impl Trust {
             _ => {}
          }
       }
-      
+
       // Trace and return tRUST struct
       // trace!("TRUST VALUE: {:?}",&self);
       Ok(())

@@ -36,8 +36,8 @@ pub struct Ou {
 
 impl Ou {
     // New computer.
-    pub fn new() -> Self { 
-        Self { ..Default::default() } 
+    pub fn new() -> Self {
+        Self { ..Default::default() }
     }
 
     // Immutable access.
@@ -118,12 +118,10 @@ impl Ou {
           // For all, bins attributes
         for (key, value) in &result_bin {
              match key.as_str() {
-                "objectGUID" => {
-                    // objectGUID raw to string
-                    let guid = decode_guid_le(&value[0]);
-                    self.object_identifier = guid.to_owned();
-                    self.properties.objectguid = guid;
-                }
+                 "objectGUID" => {
+                     // objectGUID raw to string
+                     self.object_identifier = decode_guid_le(&value[0]).to_owned();
+                 }
                  "nTSecurityDescriptor" => {
                      // trace!("nTSecurityDescriptor ACES ACLS ?");
                      // nTSecurityDescriptor raw to string
@@ -163,7 +161,7 @@ impl LdapObject for Ou {
     fn to_json(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
-    
+
     // Get values
     fn get_object_identifier(&self) -> &String {
         &self.object_identifier
@@ -174,12 +172,8 @@ impl LdapObject for Ou {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> {
-        panic!("Not used by current object.");
-    }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
     fn get_links(&self) -> &Vec<Link> {
         &self.links
     }
@@ -192,7 +186,7 @@ impl LdapObject for Ou {
     fn get_haslaps(&self) -> &bool {
         &false
     }
-    
+
     // Get mutable values
     fn get_aces_mut(&mut self) -> &mut Vec<AceTemplate> {
         &mut self.aces
@@ -203,7 +197,7 @@ impl LdapObject for Ou {
     fn get_allowed_to_delegate_mut(&mut self) -> &mut Vec<Member> {
         panic!("Not used by current object.");
     }
-    
+
     // Edit values
     fn set_is_acl_protected(&mut self, is_acl_protected: bool) {
         self.is_acl_protected = is_acl_protected;
@@ -227,10 +221,6 @@ impl LdapObject for Ou {
     fn set_child_objects(&mut self, child_objects: Vec<Member>) {
         self.child_objects = child_objects
     }
-    fn set_owner_rights_flags(&mut self, any: bool, any_inherited: bool) {
-        self.properties.doesanyacegrantownerrights = any;
-        self.properties.doesanyinheritedacegrantownerrights = any_inherited;
-    }
 }
 
 // Ou properties structure
@@ -240,9 +230,6 @@ pub struct OuProperties {
     name: String,
     distinguishedname: String,
     domainsid: String,
-    objectguid: String,
-    doesanyacegrantownerrights: bool,
-    doesanyinheritedacegrantownerrights: bool,
     isaclprotected: bool,
     highvalue: bool,
     description: Option<String>,
@@ -259,7 +246,7 @@ impl OuProperties {
         &self.distinguishedname
     }
 
-    // Mutable access.
+
     pub fn isaclprotected_mut(&mut self) -> &mut bool {
         &mut self.isaclprotected
     }

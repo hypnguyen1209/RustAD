@@ -31,8 +31,8 @@ pub struct NtAuthStore {
 
 impl NtAuthStore {
     // New NtAuthStore
-    pub fn new() -> Self { 
-        Self { ..Default::default() } 
+    pub fn new() -> Self {
+        Self { ..Default::default() }
     }
 
     /// Function to parse and replace value in json template for NT Auth Store object.
@@ -48,7 +48,7 @@ impl NtAuthStore {
         let result_dn: String = result.dn.to_uppercase();
         let result_attrs: HashMap<String, Vec<String>> = result.attrs;
         let result_bin: HashMap<String, Vec<Vec<u8>>> = result.bin_attrs;
-  
+
         // Debug for current object
         debug!("Parse NtAuthStore: {result_dn}");
 
@@ -60,13 +60,13 @@ impl NtAuthStore {
         for (key, value) in &result_bin {
             trace!("  {key:?}:{value:?}");
         }
-  
+
         // Change all values...
         self.properties.domain = domain.to_uppercase();
         self.properties.distinguishedname = result_dn;
         self.properties.domainsid = domain_sid.to_string();
         self.domain_sid = domain_sid.to_string();
-  
+
         // With a check
         for (key, value) in &result_attrs {
             match key.as_str() {
@@ -89,15 +89,13 @@ impl NtAuthStore {
                 _ => {}
             }
         }
-  
+
         // For all, bins attributs
         for (key, value) in &result_bin {
             match key.as_str() {
                 "objectGUID" => {
                     // objectGUID raw to string
-                    let guid = decode_guid_le(&value[0]);
-                    self.object_identifier = guid.to_owned();
-                    self.properties.objectguid = guid;
+                    self.object_identifier = decode_guid_le(&value[0]).to_owned();
                 }
                 "nTSecurityDescriptor" => {
                     // nTSecurityDescriptor raw to string
@@ -119,7 +117,7 @@ impl NtAuthStore {
                 _ => {}
             }
         }
-  
+
         // Push DN and SID in HashMap
         if self.object_identifier != "SID" {
             dn_sid.insert(
@@ -132,7 +130,7 @@ impl NtAuthStore {
                 "NtAuthStore".to_string()
             );
         }
-  
+
         // Trace and return NtAuthStore struct
         // trace!("JSON OUTPUT: {:?}",serde_json::to_string(&self).unwrap());
         Ok(())
@@ -155,25 +153,17 @@ impl LdapObject for NtAuthStore {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> {
-        panic!("Not used by current object.");
-    }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
-    fn get_links(&self) -> &Vec<Link> {
-        panic!("Not used by current object.");
-    }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
+    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
     fn get_haslaps(&self) -> &bool {
         &false
     }
-    
+
     // Get mutable values
     fn get_aces_mut(&mut self) -> &mut Vec<AceTemplate> {
         &mut self.aces
@@ -184,7 +174,7 @@ impl LdapObject for NtAuthStore {
     fn get_allowed_to_delegate_mut(&mut self) -> &mut Vec<Member> {
         panic!("Not used by current object.");
     }
-    
+
     // Edit values
     fn set_is_acl_protected(&mut self, is_acl_protected: bool) {
         self.is_acl_protected = is_acl_protected;
@@ -208,25 +198,18 @@ impl LdapObject for NtAuthStore {
     fn set_child_objects(&mut self, _child_objects: Vec<Member>) {
         // Not used by current object.
     }
-    fn set_owner_rights_flags(&mut self, any: bool, any_inherited: bool) {
-        self.properties.doesanyacegrantownerrights = any;
-        self.properties.doesanyinheritedacegrantownerrights = any_inherited;
-    }
 }
 
 
 // NtAuthStore properties structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct NtAuthStoreProperties {
-    domain: String,
-    name: String,
-    distinguishedname: String,
-    domainsid: String,
-    objectguid: String,
-    doesanyacegrantownerrights: bool,
-    doesanyinheritedacegrantownerrights: bool,
-    isaclprotected: bool,
-    certthumbprints: Vec<String>,
-    description: Option<String>,
-    whencreated: i64,
+   domain: String,
+   name: String,
+   distinguishedname: String,
+   domainsid: String,
+   isaclprotected: bool,
+   certthumbprints: Vec<String>,
+   description: Option<String>,
+   whencreated: i64,
 }

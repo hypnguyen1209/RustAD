@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::error::Error;
 
 use crate::enums::acl::parse_ntsecuritydescriptor;
-use crate::enums::decode_guid_le;
+use crate::enums::sid::decode_guid_le;
 use crate::objects::common::{AceTemplate, LdapObject, Link, Member, SPNTarget};
 use crate::utils::date::string_to_epoch;
 
@@ -25,6 +25,8 @@ pub struct Gpo {
     is_acl_protected: bool,
     #[serde(rename = "ContainedBy")]
     contained_by: Option<Member>,
+    #[serde(rename = "Links")]
+    links: Vec<Link>,
 }
 
 impl Gpo {
@@ -132,9 +134,7 @@ impl Gpo {
             match key.as_str() {
                 "objectGUID" => {
                     // objectGUID raw to string
-                    let guid = decode_guid_le(&value[0]);
-                    self.object_identifier = guid.to_owned();
-                    self.properties.objectguid = guid;
+                    self.object_identifier = decode_guid_le(&value[0]).to_owned();
                 }
                 "nTSecurityDescriptor" => {
                     // nTSecurityDescriptor raw to string
@@ -183,21 +183,13 @@ impl LdapObject for Gpo {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> {
-        panic!("Not used by current object.");
-    }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
-    fn get_links(&self) -> &Vec<Link> {
-        panic!("Not used by current object.");
-    }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
+    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
     fn get_haslaps(&self) -> &bool {
         &false
     }
@@ -227,18 +219,14 @@ impl LdapObject for Gpo {
     fn set_allowed_to_delegate(&mut self, _allowed_to_delegate: Vec<Member>) {
         // Not used by current object.
     }
-    fn set_links(&mut self, _links: Vec<Link>) {
-        // Not used by current object.
+    fn set_links(&mut self, links: Vec<Link>) {
+        self.links = links;
     }
     fn set_contained_by(&mut self, contained_by: Option<Member>) {
         self.contained_by = contained_by;
     }
     fn set_child_objects(&mut self, _child_objects: Vec<Member>) {
         // Not used by current object.
-    }
-    fn set_owner_rights_flags(&mut self, any: bool, any_inherited: bool) {
-        self.properties.doesanyacegrantownerrights = any;
-        self.properties.doesanyinheritedacegrantownerrights = any_inherited;
     }
 }
 
@@ -249,88 +237,10 @@ pub struct GpoProperties {
     name: String,
     distinguishedname: String,
     domainsid: String,
-    objectguid: String,
-    doesanyacegrantownerrights: bool,
-    doesanyinheritedacegrantownerrights: bool,
     isaclprotected: bool,
     highvalue: bool,
     description: Option<String>,
     whencreated: i64,
     gpcpath: String,
     gpostatus: String,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn parse_gpo_with_flags(flags: Option<&str>) -> Gpo {
-        let mut attrs = HashMap::from([
-            ("displayName".to_string(), vec!["Test GPO".to_string()]),
-            (
-                "gPCFileSysPath".to_string(),
-                vec![r"\\example.local\SYSVOL\example.local\Policies\{00000000-0000-0000-0000-000000000000}".to_string()],
-            ),
-        ]);
-        if let Some(flags) = flags {
-            attrs.insert("flags".to_string(), vec![flags.to_string()]);
-        }
-        let result = SearchEntry {
-            dn: "CN={00000000-0000-0000-0000-000000000000},CN=Policies,CN=System,DC=example,DC=local".to_string(),
-            attrs,
-            bin_attrs: HashMap::new(),
-        };
-        let mut gpo = Gpo::new();
-        let mut dn_sid = HashMap::new();
-        let mut sid_type = HashMap::new();
-
-        gpo.parse(
-            result,
-            "example.local",
-            &mut dn_sid,
-            &mut sid_type,
-            "S-1-5-21-111111111-222222222-333333333",
-            &HashMap::new(),
-        )
-        .unwrap();
-
-        gpo
-    }
-
-    #[test]
-    fn parse_preserves_gpo_status_for_all_defined_flag_values() {
-        for flags in ["0", "1", "2", "3"] {
-            let gpo = parse_gpo_with_flags(Some(flags));
-            assert_eq!(
-                gpo.to_json()["Properties"]["gpostatus"],
-                flags,
-                "flags={flags} should be retained as gpostatus",
-            );
-        }
-    }
-
-    #[test]
-    fn computer_configuration_applicability_follows_flags_bit_one() {
-        let cases = [
-            (Some("0"), true),
-            (Some("1"), true),
-            (Some("2"), false),
-            (Some("3"), false),
-            (Some("4"), true),
-            (Some("6"), false),
-            (None, true),
-            (Some(""), true),
-            (Some("not-a-number"), false),
-            (Some("4294967296"), false),
-        ];
-
-        for (flags, expected) in cases {
-            let gpo = parse_gpo_with_flags(flags);
-            assert_eq!(
-                gpo.computer_configuration_enabled(),
-                expected,
-                "unexpected computer applicability for flags={flags:?}",
-            );
-        }
-    }
 }

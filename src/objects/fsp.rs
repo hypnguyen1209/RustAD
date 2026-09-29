@@ -5,7 +5,6 @@ use log::{debug, trace};
 use std::collections::HashMap;
 use std::error::Error;
 
-use crate::enums::decode_guid_le;
 use crate::enums::regex::OBJECT_SID_RE1;
 use crate::objects::common::{LdapObject, AceTemplate, SPNTarget, Link, Member};
 use crate::utils::date::string_to_epoch;
@@ -31,8 +30,8 @@ pub struct Fsp {
 
 impl Fsp {
     // New FSP
-    pub fn new() -> Self { 
-        Self { ..Default::default() } 
+    pub fn new() -> Self {
+        Self { ..Default::default() }
     }
 
     /// Function to parse and replace value in json template for ForeignSecurityPrincipal object.
@@ -62,7 +61,7 @@ impl Fsp {
 
         // Change all values...
         self.properties.domain = domain.to_uppercase();
-        self.properties.distinguishedname = result_dn;    
+        self.properties.distinguishedname = result_dn;
         self.properties.domainsid = domain_sid.to_string();
 
         #[allow(unused_assignments)]
@@ -111,20 +110,6 @@ impl Fsp {
             }
         }
 
-
-        // For all, bins attributs
-        for (key, value) in &result_bin {
-            match key.as_str() {
-                "objectGUID" => {
-                    // objectGUID raw to string
-                    let guid = decode_guid_le(&value[0]);
-                    self.object_identifier = guid.to_owned();
-                    self.properties.objectguid = guid;
-                }
-                _ => {}
-            }
-        }
-
         // Push DN and SID in HashMap
         if self.object_identifier != "SID" {
             dn_sid.insert(
@@ -144,23 +129,20 @@ impl Fsp {
 /// Default FSP properties structure
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct FspProperties {
-    domain: String,
-    name: String,
-    distinguishedname: String,
-    domainsid: String,
-    objectguid: String,
-    doesanyacegrantownerrights: bool,
-    doesanyinheritedacegrantownerrights: bool,
-    isaclprotected: bool,
-    highvalue: bool,
-    description: Option<String>,
-    whencreated: i64,
+   domain: String,
+   name: String,
+   distinguishedname: String,
+   domainsid: String,
+   isaclprotected: bool,
+   highvalue: bool,
+   description: Option<String>,
+   whencreated: i64,
 }
 
 impl FspProperties {
    // New default properties.
-   pub fn new(domain: String) -> Self { 
-      Self { 
+   pub fn new(domain: String) -> Self {
+      Self {
          domain,
          whencreated: -1,
          ..Default::default() }
@@ -229,25 +211,17 @@ impl LdapObject for Fsp {
     fn get_aces(&self) -> &Vec<AceTemplate> {
         &self.aces
     }
-    fn get_spntargets(&self) -> &Vec<SPNTarget> {
-        panic!("Not used by current object.");
-    }
-    fn get_allowed_to_delegate(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
-    fn get_links(&self) -> &Vec<Link> {
-        panic!("Not used by current object.");
-    }
+    fn get_spntargets(&self) -> &Vec<SPNTarget> { &crate::objects::common::EMPTY_VEC_SPNTARGET }
+    fn get_allowed_to_delegate(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
+    fn get_links(&self) -> &Vec<Link> { &crate::objects::common::EMPTY_VEC_LINK }
     fn get_contained_by(&self) -> &Option<Member> {
         &self.contained_by
     }
-    fn get_child_objects(&self) -> &Vec<Member> {
-        panic!("Not used by current object.");
-    }
+    fn get_child_objects(&self) -> &Vec<Member> { &crate::objects::common::EMPTY_VEC_MEMBER }
     fn get_haslaps(&self) -> &bool {
         &false
     }
-    
+
     // Get mutable values
     fn get_aces_mut(&mut self) -> &mut Vec<AceTemplate> {
         &mut self.aces
@@ -258,7 +232,7 @@ impl LdapObject for Fsp {
     fn get_allowed_to_delegate_mut(&mut self) -> &mut Vec<Member> {
         panic!("Not used by current object.");
     }
-    
+
     // Edit values
     fn set_is_acl_protected(&mut self, is_acl_protected: bool) {
         self.is_acl_protected = is_acl_protected;
@@ -281,9 +255,5 @@ impl LdapObject for Fsp {
     }
     fn set_child_objects(&mut self, _child_objects: Vec<Member>) {
         // Not used by current object.
-    }
-    fn set_owner_rights_flags(&mut self, any: bool, any_inherited: bool) {
-        self.properties.doesanyacegrantownerrights = any;
-        self.properties.doesanyinheritedacegrantownerrights = any_inherited;
     }
 }

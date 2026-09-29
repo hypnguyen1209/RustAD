@@ -188,7 +188,8 @@ impl AceFormat {
             Ok((i, data))
         }
         else {
-            panic!("Error during ACE data parsing to AceFormat!")
+            log::trace!("Skipping unsupported ACE type: 0x{:02x}", ace_type);
+            Ok((i, AceFormat::Empty))
         }
     }
     

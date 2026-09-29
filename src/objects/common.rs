@@ -6,6 +6,12 @@ use serde_json::{json,value::Value};
 use serde::{Deserialize, Serialize};
 
 
+pub static EMPTY_VEC_SPNTARGET: Vec<SPNTarget> = Vec::new();
+pub static EMPTY_VEC_MEMBER: Vec<Member> = Vec::new();
+pub static EMPTY_VEC_LINK: Vec<Link> = Vec::new();
+pub static EMPTY_OPTION_MEMBER: Option<Member> = None;
+pub static FALSE_VALUE: bool = false;
+
 /// LdapObject structure
 pub trait LdapObject {
    // Ldap object structure (User,Group,Computer...) to JSON
@@ -36,7 +42,6 @@ pub trait LdapObject {
    fn set_links(&mut self, links: Vec<Link>);
    fn set_contained_by(&mut self, contained_by: Option<Member>);
    fn set_child_objects(&mut self, child_objects: Vec<Member>);
-   fn set_owner_rights_flags(&mut self, _any: bool, _any_inherited: bool);
 }
 
 /// LocalGroup structure
@@ -56,8 +61,8 @@ pub struct LocalGroup {
 
 impl LocalGroup {
    // New Local Group.
-   pub fn new() -> Self { 
-      Self { 
+   pub fn new() -> Self {
+      Self {
          ..Default::default()
       }
    }
@@ -121,8 +126,8 @@ impl Default for Session {
 
 impl Session {
    // New session.
-   pub fn new() -> Self { 
-      Self { 
+   pub fn new() -> Self {
+      Self {
          collected: true,
          ..Default::default()
       }
@@ -162,8 +167,8 @@ pub struct UserComputerSession {
 
 impl UserComputerSession {
    // New User Computer Session.
-   pub fn new() -> Self { 
-      Self { 
+   pub fn new() -> Self {
+      Self {
          ..Default::default()
       }
    }
@@ -183,7 +188,7 @@ impl UserComputerSession {
    pub fn computer_sid_mut(&mut self) -> &mut String {
       &mut self.computer_sid
    }
-   
+
 }
 
 /// Session structure
@@ -203,8 +208,8 @@ pub struct UserRight {
 
 impl UserRight {
    // New User Right.
-   pub fn new() -> Self { 
-      Self { 
+   pub fn new() -> Self {
+      Self {
          ..Default::default()
       }
    }
@@ -276,7 +281,7 @@ pub struct RegistryData {
 
 impl RegistryData {
    // New RegistryData.
-   pub fn new() -> Self { 
+   pub fn new() -> Self {
       Self {
          collected: true,
          ..Default::default()
@@ -301,7 +306,7 @@ pub struct Member {
 impl Member {
    // New member.
     pub fn new() -> Self {
-      Self { 
+      Self {
          object_identifier: "SID".to_string(),
          ..Default::default()
       }
@@ -324,18 +329,8 @@ impl Member {
    }
 }
 
-/// Well-known SID of OWNER RIGHTS. An ACE granting rights to it applies to
-/// whoever currently owns the object, making ownership an escalation path.
-const OWNER_RIGHTS_SID: &str = "S-1-3-4";
-
-/// `sid_maker` prefixes well-known SIDs with the domain name, so a plain
-/// equality test is not enough.
-fn is_owner_rights_sid(sid: &str) -> bool {
-    sid == OWNER_RIGHTS_SID || sid.ends_with(&format!("-{OWNER_RIGHTS_SID}"))
-}
-
 /// AceTemplate structure
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AceTemplate {
    #[serde(rename = "PrincipalSID")]
    principal_sid: String,
@@ -347,10 +342,6 @@ pub struct AceTemplate {
    is_inherited: bool,
    #[serde(rename = "InheritanceHash")]
    inheritance_hash: String,
-   #[serde(rename = "IsPermissionForOwnerRightsSid")]
-   is_permission_for_owner_rights_sid: bool,
-   #[serde(rename = "IsInheritedPermissionForOwnerRightsSid")]
-   is_inherited_permission_for_owner_rights_sid: bool,
 }
 
 impl AceTemplate {
@@ -362,18 +353,7 @@ impl AceTemplate {
       is_inherited: bool,
       inheritance_hash: String,
    ) -> Self {
-      // Both OWNER RIGHTS flags follow from the trustee SID and the inherited
-      // bit, so they are computed here rather than in a later pass.
-      let is_owner_rights = is_owner_rights_sid(&principal_sid);
-      Self {
-         principal_sid,
-         principal_type,
-         right_name,
-         is_inherited,
-         inheritance_hash,
-         is_permission_for_owner_rights_sid: is_owner_rights,
-         is_inherited_permission_for_owner_rights_sid: is_owner_rights && is_inherited,
-      }
+      Self { principal_sid, principal_type , right_name, is_inherited, inheritance_hash}
    }
 
    // Immutable access.
@@ -391,12 +371,6 @@ impl AceTemplate {
    }
    pub fn inheritance_hash(&self) -> &String {
       &self.inheritance_hash
-   }
-   pub fn is_permission_for_owner_rights_sid(&self) -> bool {
-      self.is_permission_for_owner_rights_sid
-   }
-   pub fn is_inherited_permission_for_owner_rights_sid(&self) -> bool {
-      self.is_inherited_permission_for_owner_rights_sid
    }
 
    // Mutable access.
@@ -429,7 +403,7 @@ pub struct Link {
 impl Link {
    // New object.
    pub fn new(is_enforced: bool, guid: String) -> Self { Self { is_enforced, guid } }
-   
+
    // Immutable access.
    pub fn is_enforced(&self) -> &bool {
       &self.is_enforced
@@ -437,7 +411,7 @@ impl Link {
    pub fn guid(&self) -> &String {
       &self.guid
    }
- 
+
    // Mutable access.
    pub fn is_enforced_mut(&mut self) -> &mut bool {
       &mut self.is_enforced
@@ -464,10 +438,10 @@ pub struct GPOChange {
 
 impl GPOChange {
    // New GPOChanges.
-   pub fn new() -> Self { 
+   pub fn new() -> Self {
       Self {
          ..Default::default()
-      } 
+      }
    }
 
    // Imutable access.
@@ -518,12 +492,12 @@ pub struct SPNTarget {
 
 impl SPNTarget {
    // New object.
-   pub fn new() -> Self { 
-      Self { 
-         computer_sid: "SID".to_string(), 
-         port: 1433, 
+   pub fn new() -> Self {
+      Self {
+         computer_sid: "SID".to_string(),
+         port: 1433,
          service: "SQLAdmin".to_string()
-      } 
+      }
    }
 
    // Immutable access.
@@ -558,7 +532,7 @@ pub struct FinalJson{
 
 impl FinalJson  {
    // New FinalJson.
-   pub fn new(data: Vec<Value>, meta: Meta) -> Self { 
+   pub fn new(data: Vec<Value>, meta: Meta) -> Self {
       Self {
          data,
          meta
@@ -600,16 +574,16 @@ impl Meta {
       count: i32,
       version: i8,
       collectorversion: String
-   ) -> Self { 
-      Self { 
+   ) -> Self {
+      Self {
          methods,
          mtype,
          count,
          version,
          collectorversion
-      } 
+      }
    }
-   
+
    // Imutable access.
    pub fn methods(&self) -> &i32 {
       &self.methods
@@ -646,7 +620,7 @@ pub fn parse_unknown(result: SearchEntry, _domain: &str) -> serde_json::value::V
    let _result_dn = result.dn.to_uppercase();
    let _result_attrs: HashMap<String, Vec<String>> = result.attrs;
    let _result_bin: HashMap<String, Vec<Vec<u8>>> = result.bin_attrs;
-   
+
    let unknown_json = json!({
        "unknown": null,
    });
