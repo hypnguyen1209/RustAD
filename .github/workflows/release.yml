@@ -1,0 +1,193 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: rustad
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Verify tag matches Cargo.toml version
+        run: |
+          MANIFEST="$(cargo metadata --format-version=1 --no-deps \
+            | jq -r '.packages[] | select(.name == "rustad") | .version')"
+          EXPECTED="v${MANIFEST}"
+          if [ "${GITHUB_REF_NAME}" != "${EXPECTED}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match Cargo.toml version (${EXPECTED})"
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} matches Cargo.toml version ${EXPECTED}"
+
+      - name: Test
+        run: cargo test --all
+
+  build:
+    needs: check
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            features: "nogssapi"
+            ext: ""
+            archive: tar.gz
+
+          - name: linux-x64-musl
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            features: "nogssapi"
+            ext: ""
+            archive: tar.gz
+            apt_packages: musl-tools
+
+          - name: linux-arm64
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            features: "nogssapi"
+            ext: ""
+            archive: tar.gz
+            cross_linker: aarch64-linux-gnu-gcc
+            apt_packages: gcc-aarch64-linux-gnu
+
+          - name: darwin-x64
+            os: macos-14
+            target: x86_64-apple-darwin
+            features: "nogssapi"
+            ext: ""
+            archive: tar.gz
+
+          - name: darwin-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+            features: "nogssapi"
+            ext: ""
+            archive: tar.gz
+
+          - name: windows-x64-msvc
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            features: "nogssapi"
+            ext: ".exe"
+            archive: zip
+
+          - name: windows-x64-gnu
+            os: windows-latest
+            target: x86_64-pc-windows-gnu
+            features: "nogssapi"
+            ext: ".exe"
+            archive: zip
+
+          - name: windows-x86-gnu
+            os: windows-latest
+            target: i686-pc-windows-gnu
+            features: "nogssapi"
+            ext: ".exe"
+            archive: zip
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install system deps (Linux)
+        if: matrix.apt_packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt_packages }}
+
+      - name: Build
+        shell: bash
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.cross_linker }}
+        run: |
+          cargo build --release --locked --target ${{ matrix.target }} \
+            --features ${{ matrix.features }} --no-default-features
+
+      - name: Strip binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          strip "target/${{ matrix.target }}/release/${BINARY_NAME}${{ matrix.ext }}" 2>/dev/null || true
+
+      - name: Strip binary (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          strip "target/${{ matrix.target }}/release/${BINARY_NAME}${{ matrix.ext }}" 2>/dev/null || true
+
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          STAGE="${BINARY_NAME}-${VERSION}-${{ matrix.name }}"
+          mkdir "${STAGE}"
+          cp "target/${{ matrix.target }}/release/${BINARY_NAME}${{ matrix.ext }}" "${STAGE}/"
+          cp README.md LICENSE "${STAGE}/" 2>/dev/null || true
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "STAGE=${STAGE}" >> "$GITHUB_ENV"
+
+      - name: Package tar.gz
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          tar czf "${STAGE}.tar.gz" "${STAGE}"
+          echo "ARCHIVE=${STAGE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Package zip
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: |
+          7z a "${STAGE}.zip" "${STAGE}" >/dev/null
+          echo "ARCHIVE=${STAGE}.zip" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ env.BINARY_NAME }}-${{ matrix.name }}
+          path: ${{ env.ARCHIVE }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create checksums
+        working-directory: artifacts
+        run: |
+          sha256sum ${BINARY_NAME}-* > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/*
