@@ -27,6 +27,7 @@ pub struct SysvolGpo {
     pub privileges: Vec<PrivilegeAssignment>,
     pub restricted_groups: Vec<RestrictedGroupDirective>,
     pub gpp_local_groups: Vec<GppLocalGroup>,
+    pub sensitive_findings: Vec<crate::snaffler::scanner::ScanFinding>,
 }
 
 impl SysvolGpo {
@@ -40,6 +41,7 @@ impl SysvolGpo {
         !self.privileges.is_empty()
             || !self.restricted_groups.is_empty()
             || !self.gpp_local_groups.is_empty()
+            || !self.sensitive_findings.is_empty()
     }
 }
 
@@ -138,12 +140,20 @@ async fn collect(
 
         // GptTmpl.inf: Privilege Rights (#47) and Restricted Groups (#56).
         match try_read_file(&mut smb, dc_host, &files.gpttmpl).await {
-            Ok(Some(bytes)) => match parse_gpttmpl_bytes(&bytes) {
-                Ok(policy) => {
-                    gpo.privileges = policy.privilege_rights().to_vec();
-                    gpo.restricted_groups = policy.restricted_groups().to_vec();
+            Ok(Some(bytes)) => {
+                match parse_gpttmpl_bytes(&bytes) {
+                    Ok(policy) => {
+                        gpo.privileges = policy.privilege_rights().to_vec();
+                        gpo.restricted_groups = policy.restricted_groups().to_vec();
+                    }
+                    Err(err) => warn!("[gpo] {} GptTmpl.inf parse: {err}", gpo.guid),
                 }
-                Err(err) => warn!("[gpo] {} GptTmpl.inf parse: {err}", gpo.guid),
+                // Snaffler: scan GptTmpl.inf content for credentials
+                if let Ok(text) = String::from_utf8(bytes.clone()) {
+                    gpo.sensitive_findings.extend(
+                        crate::snaffler::scanner::scan_file(&files.gpttmpl, Some(&text))
+                    );
+                }
             },
             Ok(None) => {} // absent, normal
             Err(_) => {}   // real error already logged by try_read_file
@@ -152,9 +162,17 @@ async fn collect(
         // GPP Groups.xml: local group membership (#56), machine and user scope.
         for path in [&files.groups_machine, &files.groups_user] {
             match try_read_file(&mut smb, dc_host, path).await {
-                Ok(Some(bytes)) => match parse_groups_xml(&bytes) {
-                    Ok(mut groups) => gpo.gpp_local_groups.append(&mut groups),
-                    Err(err) => warn!("[gpo] {} Groups.xml parse: {err}", gpo.guid),
+                Ok(Some(bytes)) => {
+                    match parse_groups_xml(&bytes) {
+                        Ok(mut groups) => gpo.gpp_local_groups.append(&mut groups),
+                        Err(err) => warn!("[gpo] {} Groups.xml parse: {err}", gpo.guid),
+                    }
+                    // Snaffler: scan Groups.xml for GPP cpassword / credentials
+                    if let Ok(text) = String::from_utf8(bytes.clone()) {
+                        gpo.sensitive_findings.extend(
+                            crate::snaffler::scanner::scan_file(path, Some(&text))
+                        );
+                    }
                 },
                 Ok(None) => {}
                 Err(_) => {}
@@ -253,6 +271,7 @@ mod tests {
             privileges: parsed_inf.privilege_rights().to_vec(),
             restricted_groups: parsed_inf.restricted_groups().to_vec(),
             gpp_local_groups: parse_groups_xml(xml.as_bytes()).unwrap(),
+            sensitive_findings: Vec::new(),
         }
     }
 

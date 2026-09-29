@@ -5,7 +5,7 @@ use ldap3::SearchEntry;
 use rayon::prelude::*;
 use std::path::PathBuf;
 
-const CACHE_DIR: &str = ".rusthound-cache";
+const CACHE_DIR: &str = ".cache";
 const CACHE_FILE: &str = "ldap.bin";
 
 use crate::{
@@ -53,6 +53,7 @@ pub struct ADResults {
     pub certtemplates: Vec<CertTemplate>,
     pub issuancepolicies: Vec<IssuancePolicie>,
     pub mappings: DomainMappings,
+    pub snaffler_findings: Vec<crate::snaffler::scanner::ScanFinding>,
 }
 
 #[derive(Default)]
@@ -566,5 +567,12 @@ pub async fn run_collection(
     };
 
     run_modules(options, &mut results).await?;
+
+    if options.analyze {
+        log::info!("Running attack surface analysis...");
+        let report = crate::analyze::run_analysis(&results, &options.domain, options.owned.as_deref())?;
+        crate::analyze::report::print_report(&report, None, &options.path);
+    }
+
     make_result(options, results)
 }

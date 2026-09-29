@@ -19,10 +19,9 @@ pub async fn run_modules(
     ad: &mut ADResults
 ) -> Result<(), Box<dyn Error>> {
 
-    let cert_auth = common_args.uses_cert();
-    if cert_auth {
-        log::warn!("Certificate authentication in use: skipping SMB-based modules \
-                    (sessions and GPO/SYSVOL) no SMB credentials available.");
+    let skip_smb = !common_args.has_smb_creds();
+    if skip_smb {
+        log::info!("No SMB credentials available: skipping sessions and GPO/SYSVOL modules.");
     }
 
     // [MODULE - RESOLVER] Resolve FQDN to IP address.
@@ -42,7 +41,7 @@ pub async fn run_modules(
     // - SRVSVC / NetrSessionEnum - inbound SMB sessions (client IP + username).
     // - WKSSVC / NetrWkstaUserEnum - users with an active logon context on the machine.
     // - WINREG / HKEY_USERS - SIDs of loaded profile hives (= logged-on users).
-    if common_args.collection_method.does_sessions() && !cert_auth {
+    if common_args.collection_method.does_sessions() && !skip_smb {
         sessions::run(common_args, &ad.users, &mut ad.computers).await?;
     }
 
@@ -85,7 +84,7 @@ pub async fn run_modules(
 
     // [MODULE - GPO SYSVOL] read GptTmpl.inf / Groups.xml off the DC SYSVOL share.
     // <#47 Privileges> and <#56 LocalGroup>. DC-side I/O, so it also runs in DCOnly.
-    if common_args.collection_method.does_gpo() && !cert_auth {
+    if common_args.collection_method.does_gpo() && !skip_smb {
         let computer_scope = gpo::sysvol::ComputerGpoScope::from_gpos(&ad.gpos);
         let sysvol = match collect_sysvol_targets(common_args, &computer_scope).await {
             Ok(v) => v,
@@ -99,6 +98,19 @@ pub async fn run_modules(
                 "[gpo] mapping {} GPO(s) to GPOChanges / UserRights",
                 sysvol.len()
             );
+
+            // Collect Snaffler findings from SYSVOL before apply_gpo borrows sysvol
+            for sgpo in &sysvol {
+                if !sgpo.sensitive_findings.is_empty() {
+                    log::info!(
+                        "[snaffler] {} sensitive finding(s) in GPO {}",
+                        sgpo.sensitive_findings.len(),
+                        sgpo.guid
+                    );
+                    ad.snaffler_findings.extend(sgpo.sensitive_findings.clone());
+                }
+            }
+
             gpo::apply_gpo(
                 &mut ad.ous,
                 &mut ad.domains,

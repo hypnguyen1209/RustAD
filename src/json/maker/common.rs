@@ -1,5 +1,3 @@
-use obfstr::obfstr;
-
 use serde::Serialize;
 
 use colored::Colorize;
@@ -71,7 +69,7 @@ where
         name.to_owned(),
         count as i32,
         BLOODHOUND_VERSION_4,
-        format!("RustHound-CE v{}", RUSTHOUND_VERSION.to_owned()),
+        RUSTHOUND_VERSION.to_owned(),
     );
     writer.write_all(b"],\"meta\":")?;
     serde_json::to_writer(&mut *writer, &meta)?;
@@ -165,7 +163,7 @@ pub fn make_a_zip(
     ad_results: &crate::api::ADResults,
 ) -> Result<String, Box<dyn Error>> {
     fs::create_dir_all(path)?;
-    let final_path = format!("{path}/{datetime}_{domain}_{}.zip", obfstr!("rusthound-ce"));
+    let final_path = format!("{path}/{datetime}_{domain}_output.zip");
 
     let file = File::create(&final_path)?;
     // A large buffer keeps the single-threaded deflate stream fed and cuts

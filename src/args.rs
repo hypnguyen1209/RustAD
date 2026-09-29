@@ -1,4 +1,3 @@
-//! Parsing arguments
 #[cfg(not(feature = "noargs"))]
 use clap::{Arg, ArgAction, value_parser, Command};
 
@@ -25,7 +24,6 @@ pub struct Options {
     pub fqdn_resolver: bool,
     pub hashes: Option<String>,
     pub kerberos: bool,
-    // Certificate authentication (Pass-the-Certificate / Schannel)
     pub pfx: Option<String>,
     pub pfx_pass: Option<String>,
     pub crt: Option<String>,
@@ -33,50 +31,114 @@ pub struct Options {
     pub zip: bool,
     pub verbose: log::LevelFilter,
     pub ldap_filter: String,
-
+    pub sspi: bool,
     pub cache: bool,
     pub cache_buffer_size: usize,
     pub resume: bool,
+    pub session_loop: bool,
+    pub loop_duration: u64,
+    pub loop_interval: u64,
+    pub output_prefix: Option<String>,
+    pub analyze: bool,
+    pub delay_ms: u64,
+    pub jitter_ms: u64,
+    pub owned: Option<String>,
+    pub exclude_dc: bool,
+    pub opsec: bool,
+    pub export_format: Option<String>,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            domain: String::new(),
+            username: None,
+            password: None,
+            ldapfqdn: None,
+            ip: None,
+            port: None,
+            name_server: "not set".to_string(),
+            path: "./".to_string(),
+            collection_method: CollectionMethod::All,
+            ldaps: false,
+            dns_tcp: false,
+            fqdn_resolver: false,
+            hashes: None,
+            kerberos: false,
+            sspi: false,
+            pfx: None,
+            pfx_pass: None,
+            crt: None,
+            key: None,
+            zip: false,
+            verbose: log::LevelFilter::Info,
+            ldap_filter: "(objectClass=*)".to_string(),
+            cache: false,
+            cache_buffer_size: 1000,
+            resume: false,
+            session_loop: false,
+            loop_duration: 7200,
+            loop_interval: 120,
+            output_prefix: None,
+            analyze: false,
+            delay_ms: 0,
+            jitter_ms: 0,
+            owned: None,
+            exclude_dc: false,
+            opsec: false,
+            export_format: None,
+        }
+    }
 }
 
 impl Options {
-    /// True when authenticating with a client certificate (no SMB credentials
-    /// are available, so SMB-based modules must be skipped).
     pub fn uses_cert(&self) -> bool {
         self.pfx.is_some() || self.crt.is_some()
+    }
+    pub fn has_smb_creds(&self) -> bool {
+        !self.sspi && !self.uses_cert() && (self.username.is_some() || self.hashes.is_some() || self.kerberos)
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CollectionMethod {
-    All,            // LDAP + sessions (all three RPC paths) + SMB on SYSVOL
-    DCOnly,         // LDAP only, never contacts a machine + SMB on SYSVOL
-    Session,        // LDAP + SRVSVC + WKSSVC + WINREG 
-    RegistryOnly,   // LDAP + WINREG
-    LdapOnly,       // LDAP
+    All,
+    Default,
+    DCOnly,
+    Session,
+    RegistryOnly,
+    LdapOnly,
+    Group,
+    ACL,
+    ObjectProps,
+    SPNTargets,
+    Trusts,
+    Container,
+    GPOLocalGroup,
+    ComputerOnly,
+    RDP,
+    DCOM,
+    PSRemote,
 }
 
 impl CollectionMethod {
-    // Methods that never contact a machine: DCOnly and LdapOnly.
     pub fn does_sessions(&self) -> bool {
-        !matches!(self, Self::DCOnly | Self::LdapOnly)
+        matches!(self, Self::All | Self::Session | Self::RDP | Self::DCOM | Self::PSRemote)
     }
-    pub fn srvsvc(&self)   -> bool { matches!(self, Self::All | Self::Session) }
-    pub fn wkssvc(&self)   -> bool { matches!(self, Self::All | Self::Session) }
+    pub fn srvsvc(&self) -> bool { matches!(self, Self::All | Self::Session) }
+    pub fn wkssvc(&self) -> bool { matches!(self, Self::All | Self::Session) }
     pub fn registry(&self) -> bool { matches!(self, Self::All | Self::Session | Self::RegistryOnly) }
-    // SYSVOL GPO reading contacts the DC, so LdapOnly stays out of it.
-    pub fn does_gpo(&self)  -> bool { matches!(self, Self::All | Self::DCOnly) }
+    pub fn does_gpo(&self) -> bool { matches!(self, Self::All | Self::DCOnly | Self::Default | Self::GPOLocalGroup) }
+    pub fn does_ldap(&self) -> bool { !matches!(self, Self::Session | Self::RDP | Self::DCOM | Self::PSRemote) }
 }
 
-// Current RustHound version
 pub const RUSTHOUND_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(not(feature = "noargs"))]
 fn cli() -> Command {
-    // Return Command args
-    Command::new("rusthound-ce")
+    Command::new("")
     .version(RUSTHOUND_VERSION)
-    .about("Active Directory data collector for BloodHound Community Edition.\ng0h4n <https://twitter.com/g0h4n_0>")
+    .about("")
     .arg(Arg::new("v")
         .short('v')
         .help("Set the level of verbosity")
@@ -86,9 +148,9 @@ fn cli() -> Command {
     .arg(Arg::new("domain")
         .short('d')
         .long("domain")
-            .help("Domain name like: DOMAIN.LOCAL")
-            .required(true)
-            .value_parser(value_parser!(String))
+        .help("Domain name like: DOMAIN.LOCAL")
+        .required(true)
+        .value_parser(value_parser!(String))
     )
     .next_help_heading("OPTIONAL VALUES")
     .arg(Arg::new("ldapusername")
@@ -150,7 +212,7 @@ fn cli() -> Command {
     .next_help_heading("CERTIFICATE AUTHENTICATION")
     .arg(Arg::new("pfx")
         .long("pfx")
-        .help("PFX/PKCS#12 client certificate for certificate authentication (Pass-the-Certificate). Uses StartTLS by default, or LDAPS with --ldaps")
+        .help("PFX/PKCS#12 client certificate for certificate authentication (Pass-the-Certificate)")
         .required(false)
         .value_parser(value_parser!(String))
     )
@@ -176,15 +238,18 @@ fn cli() -> Command {
     .arg(Arg::new("collectionmethod")
         .short('c')
         .long("collectionmethod")
-        .help("Which information to collect. Supported: All (LDAP, SMB, HTTP), DCOnly (LDAP + SYSVOL, no member-machine connections), Session (user sessions over RPC), RegistryOnly (sessions over WINREG), LdapOnly (LDAP only, no machine or SYSVOL) (default: All)")        .required(false)
-        .value_name("COLLECTIONMETHOD")
-        .value_parser(["All", "DCOnly", "Session", "RegistryOnly", "LdapOnly"])
+        .help("Collection method (default: All). Values: All, Default (no sessions), DCOnly, Session, RegistryOnly, LdapOnly, Group, ACL, ObjectProps, SPNTargets, Trusts, Container, GPOLocalGroup, ComputerOnly, RDP, DCOM, PSRemote")
+        .required(false)
+        .value_name("METHOD")
+        .value_parser(["All", "Default", "DCOnly", "Session", "RegistryOnly", "LdapOnly",
+            "Group", "ACL", "ObjectProps", "SPNTargets", "Trusts", "Container",
+            "GPOLocalGroup", "ComputerOnly", "RDP", "DCOM", "PSRemote"])
         .num_args(0..=1)
         .default_missing_value("All")
     )
     .arg(Arg::new("ldap-filter")
         .long("ldap-filter")
-        .help("Use custom ldap-filter default is : (objectClass=*)")
+        .help("Use custom LDAP filter (default: (objectClass=*))")
         .required(false)
         .value_parser(value_parser!(String))
         .default_missing_value("(objectClass=*)")
@@ -219,6 +284,79 @@ fn cli() -> Command {
         .action(ArgAction::SetTrue)
         .global(false)
     )
+    .arg(Arg::new("loop")
+        .long("loop")
+        .help("Loop session collection repeatedly")
+        .required(false)
+        .action(ArgAction::SetTrue)
+        .global(false)
+    )
+    .arg(Arg::new("loopduration")
+        .long("loopduration")
+        .help("Duration of session loop in seconds (default: 7200 = 2 hours)")
+        .required(false)
+        .value_parser(value_parser!(u64))
+    )
+    .arg(Arg::new("loopinterval")
+        .long("loopinterval")
+        .help("Interval between session loops in seconds (default: 120 = 2 minutes)")
+        .required(false)
+        .value_parser(value_parser!(u64))
+    )
+    .arg(Arg::new("outputprefix")
+        .long("outputprefix")
+        .help("Prefix for output file names")
+        .required(false)
+        .value_parser(value_parser!(String))
+    )
+    .next_help_heading("ANALYSIS (post-collection)")
+    .arg(Arg::new("analyze")
+        .long("analyze")
+        .help("Run attack surface analysis after collection (paths, ACLs, ADCS, Kerberoast, DCSync, etc.)")
+        .required(false)
+        .action(ArgAction::SetTrue)
+        .global(false)
+    )
+    .next_help_heading("OPERATIONAL")
+    .arg(Arg::new("delay")
+        .long("delay")
+        .help("Delay between requests in milliseconds (default: 0)")
+        .required(false)
+        .value_parser(value_parser!(u64))
+    )
+    .arg(Arg::new("jitter")
+        .long("jitter")
+        .help("Random jitter added to delay in milliseconds (default: 0)")
+        .required(false)
+        .value_parser(value_parser!(u64))
+    )
+    .arg(Arg::new("opsec")
+        .long("opsec")
+        .help("OPSEC mode: generate traffic patterns closer to genuine requests")
+        .required(false)
+        .action(ArgAction::SetTrue)
+        .global(false)
+    )
+    .arg(Arg::new("exclude-dc")
+        .long("exclude-dc")
+        .help("Skip Domain Controllers in session enumeration")
+        .required(false)
+        .action(ArgAction::SetTrue)
+        .global(false)
+    )
+    .arg(Arg::new("owned")
+        .long("owned")
+        .help("Comma-separated list of owned/compromised principals for path analysis")
+        .required(false)
+        .value_parser(value_parser!(String))
+    )
+    .arg(Arg::new("export")
+        .long("export")
+        .help("Export analysis report format: json, csv, or md")
+        .required(false)
+        .value_parser(["json", "csv", "md"])
+    )
+    .next_help_heading("CACHING")
     .arg(Arg::new("cache")
         .long("cache")
         .help("Cache LDAP search results to disk (reduce memory usage on large domains)")
@@ -249,62 +387,27 @@ fn cli() -> Command {
 }
 
 #[cfg(not(feature = "noargs"))]
-/// Function to extract all argument and put it in 'Options' structure.
 pub fn extract_args() -> Options {
-
-    // Get arguments
     let matches = cli().get_matches();
 
-    // Now get values
-    let d = matches
-        .get_one::<String>("domain")
-        .map(|s| s.as_str())
-        .unwrap();
-    let username = matches
-        .get_one::<String>("ldapusername")
-        .map(|s| s.to_owned());
-    let password = matches
-        .get_one::<String>("ldappassword")
-        .map(|s| s.to_owned());
-    let hashes = matches
-        .get_one::<String>("hashes")
-        .map(|s| s.to_owned());
+    let d = matches.get_one::<String>("domain").map(|s| s.as_str()).unwrap();
+    let username = matches.get_one::<String>("ldapusername").cloned();
+    let password = matches.get_one::<String>("ldappassword").cloned();
+    let hashes = matches.get_one::<String>("hashes").cloned();
     let f = matches.get_one::<String>("ldapfqdn").cloned();
-    let ip = matches.get_one::<String>("ldapip").cloned();    
+    let ip = matches.get_one::<String>("ldapip").cloned();
     let port = match matches.get_one::<String>("ldapport") {
         Some(val) => val.parse::<u16>().ok(),
         None => None,
     };
-    let n = matches
-        .get_one::<String>("name-server")
-        .map(|s| s.as_str())
-        .unwrap_or("not set");
-    let path = matches
-        .get_one::<String>("output")
-        .map(|s| s.as_str())
-        .unwrap_or("./");
-    let ldaps = matches
-        .get_one::<bool>("ldaps")
-        .map(|s| s.to_owned())
-        .unwrap_or(false);
-    let dns_tcp = matches
-        .get_one::<bool>("dns-tcp")
-        .map(|s| s.to_owned())
-        .unwrap_or(false);
-    let z = matches
-        .get_one::<bool>("zip")
-        .map(|s| s.to_owned())
-        .unwrap_or(false);
-    let fqdn_resolver = matches
-        .get_one::<bool>("fqdn-resolver")
-        .map(|s| s.to_owned())
-        .unwrap_or(false);
-    let kerberos = matches
-        .get_one::<bool>("kerberos")
-        .map(|s| s.to_owned())
-        .unwrap_or(false);
+    let n = matches.get_one::<String>("name-server").map(|s| s.as_str()).unwrap_or("not set");
+    let path = matches.get_one::<String>("output").map(|s| s.as_str()).unwrap_or("./");
+    let ldaps = matches.get_one::<bool>("ldaps").copied().unwrap_or(false);
+    let dns_tcp = matches.get_one::<bool>("dns-tcp").copied().unwrap_or(false);
+    let z = matches.get_one::<bool>("zip").copied().unwrap_or(false);
+    let fqdn_resolver = matches.get_one::<bool>("fqdn-resolver").copied().unwrap_or(false);
+    let kerberos = matches.get_one::<bool>("kerberos").copied().unwrap_or(false);
 
-    // Certificate authentication paths
     let pfx = matches.get_one::<String>("pfx").cloned();
     let pfx_pass = matches.get_one::<String>("pfx-pass").cloned();
     let crt = matches.get_one::<String>("crt").cloned();
@@ -320,23 +423,45 @@ pub fn extract_args() -> Options {
         .map(|s| s.as_str())
         .unwrap_or("All")
     {
-        "All"           => CollectionMethod::All,
-        "DCOnly"        => CollectionMethod::DCOnly,
-        "Session"       => CollectionMethod::Session,
-        "RegistryOnly"  => CollectionMethod::RegistryOnly,
-        "LdapOnly"      => CollectionMethod::LdapOnly,
-        _               => CollectionMethod::All,
+        "All" => CollectionMethod::All,
+        "Default" => CollectionMethod::Default,
+        "DCOnly" => CollectionMethod::DCOnly,
+        "Session" => CollectionMethod::Session,
+        "RegistryOnly" => CollectionMethod::RegistryOnly,
+        "LdapOnly" => CollectionMethod::LdapOnly,
+        "Group" => CollectionMethod::Group,
+        "ACL" => CollectionMethod::ACL,
+        "ObjectProps" => CollectionMethod::ObjectProps,
+        "SPNTargets" => CollectionMethod::SPNTargets,
+        "Trusts" => CollectionMethod::Trusts,
+        "Container" => CollectionMethod::Container,
+        "GPOLocalGroup" => CollectionMethod::GPOLocalGroup,
+        "ComputerOnly" => CollectionMethod::ComputerOnly,
+        "RDP" => CollectionMethod::RDP,
+        "DCOM" => CollectionMethod::DCOM,
+        "PSRemote" => CollectionMethod::PSRemote,
+        _ => CollectionMethod::All,
     };
     let ldap_filter = matches.get_one::<String>("ldap-filter").map(|s| s.as_str()).unwrap_or("(objectClass=*)");
 
     let cache = matches.get_flag("cache");
-    let cache_buffer_size = matches
-        .get_one::<usize>("cache_buffer")
-        .copied()
-        .unwrap_or(1000);
+    let cache_buffer_size = matches.get_one::<usize>("cache_buffer").copied().unwrap_or(1000);
     let resume = matches.get_flag("resume");
 
-    // Return all
+    let analyze = matches.get_one::<bool>("analyze").copied().unwrap_or(false);
+
+    let session_loop = matches.get_one::<bool>("loop").copied().unwrap_or(false);
+    let loop_duration = matches.get_one::<u64>("loopduration").copied().unwrap_or(7200);
+    let loop_interval = matches.get_one::<u64>("loopinterval").copied().unwrap_or(120);
+    let output_prefix = matches.get_one::<String>("outputprefix").cloned();
+
+    let delay_ms = matches.get_one::<u64>("delay").copied().unwrap_or(0);
+    let jitter_ms = matches.get_one::<u64>("jitter").copied().unwrap_or(0);
+    let owned = matches.get_one::<String>("owned").cloned();
+    let exclude_dc = matches.get_one::<bool>("exclude-dc").copied().unwrap_or(false);
+    let opsec = matches.get_one::<bool>("opsec").copied().unwrap_or(false);
+    let export_format = matches.get_one::<String>("export").cloned();
+
     Options {
         domain: d.to_string(),
         username,
@@ -359,75 +484,84 @@ pub fn extract_args() -> Options {
         zip: z,
         verbose: v,
         ldap_filter: ldap_filter.to_string(),
+        sspi: false,
         cache,
         cache_buffer_size,
         resume,
+        session_loop,
+        loop_duration,
+        loop_interval,
+        output_prefix,
+        analyze,
+        delay_ms,
+        jitter_ms,
+        owned,
+        exclude_dc,
+        opsec,
+        export_format,
     }
 }
 
 #[cfg(feature = "noargs")]
-/// Function to automatically get all informations needed and put it in 'Options' structure.
 pub fn auto_args() -> Options {
-
-    // Request registry key to get informations
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let cur_ver = hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters").unwrap();
-    //Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Domain
+    let cur_ver = match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters") {
+        Ok(k) => k,
+        Err(err) => {
+            eprintln!("Failed to read TCP/IP parameters from registry: {:?}", err);
+            eprintln!("This machine may not be domain-joined.");
+            std::process::exit(1);
+        }
+    };
     let domain: String = match cur_ver.get_value("Domain") {
         Ok(domain) => domain,
         Err(err) => {
-            panic!("Error: {:?}",err);
+            eprintln!("Failed to read domain from registry: {:?}", err);
+            eprintln!("This machine may not be domain-joined.");
+            std::process::exit(1);
         }
     };
-    
-    // Get LDAP fqdn
-    let _fqdn: String = run(&format!("nslookup -query=srv _ldap._tcp.{}",&domain));
-    let re = Regex::new(r"hostname.*= (?<ldap_fqdn>[0-9a-zA-Z]{1,})").unwrap();
-    let mut values =  re.captures_iter(&_fqdn);
-    let caps = values.next().unwrap();
-    let fqdn = caps["ldap_fqdn"].to_string();
 
-    // Get LDAP port
+    let _fqdn: String = run(&format!("nslookup -query=srv _ldap._tcp.{}", &domain));
+    let re = Regex::new(r"hostname.*= (?<ldap_fqdn>[0-9a-zA-Z._-]+)").unwrap();
+    let mut values = re.captures_iter(&_fqdn);
+    let caps = match values.next() {
+        Some(c) => c,
+        None => {
+            eprintln!("Failed to resolve DC via nslookup for domain: {}", &domain);
+            std::process::exit(1);
+        }
+    };
+    let fqdn = caps["ldap_fqdn"].to_string().trim_end_matches('.').to_string();
+
     let re = Regex::new(r"port.*= (?<ldap_port>[0-9]{3,})").unwrap();
-    let mut values =  re.captures_iter(&_fqdn);
-    let caps = values.next().unwrap();
-    let port = match caps["ldap_port"].to_string().parse::<u16>() {
-        Ok(x) => Some(x),
-        Err(_) => None
-    };
-    let ldaps: bool = {
-        if let Some(p) = port {
-            p == 636
-        } else {
-            false
+    let mut values = re.captures_iter(&_fqdn);
+    let caps = match values.next() {
+        Some(c) => c,
+        None => {
+            eprintln!("Failed to parse LDAP port from nslookup for domain: {}", &domain);
+            std::process::exit(1);
         }
     };
+    let port = caps["ldap_port"].to_string().parse::<u16>().ok();
+    let ldaps = port == Some(636);
 
-    // Return all
+    // With gssapi: use Kerberos (SSPI on Windows). Without: prompt for creds.
+    #[cfg(not(feature = "nogssapi"))]
+    let use_kerberos = true;
+    #[cfg(feature = "nogssapi")]
+    let use_kerberos = false;
+
     Options {
-        domain: domain.to_string(),
-        username: "not set".to_string(),
-        password: "not set".to_string(),
-        ldapfqdn: Some(fqdn.to_string()),
-        ip: None, 
-        port: port,
+        domain,
+        ldapfqdn: Some(fqdn),
+        port,
         name_server: "127.0.0.1".to_string(),
         path: "./output".to_string(),
         collection_method: CollectionMethod::All,
-        ldaps: ldaps,
-        dns_tcp: false,
-        fqdn_resolver: false,
-        hashes: None,
-        kerberos: true,
-        pfx: None,
-        pfx_pass: None,
-        crt: None,
-        key: None,
+        ldaps,
+        kerberos: use_kerberos,
         zip: true,
-        verbose: log::LevelFilter::Info,
-        ldap_filter: "(objectClass=*)".to_string(),
-        cache: false,
-        cache_buffer_size: 1000,
-        resume: false,
+        ..Default::default()
     }
 }

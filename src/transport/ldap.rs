@@ -36,6 +36,24 @@ use std::error::Error;
 /// unbinds — the caller owns the returned session.
 pub async fn ldap_auth(options: &Options) -> Result<ldap3::Ldap, Box<dyn Error>> {
     let use_cert = options.pfx.is_some() || options.crt.is_some();
+    let domain = &options.domain;
+
+    // SSPI fast path: use current Windows session token, no credentials needed
+    if options.sspi {
+        let s_url = prepare_ldap_url(options.ldaps, options.ip.as_deref(), options.port, domain);
+        let consettings = LdapConnSettings::new()
+            .set_conn_timeout(std::time::Duration::from_secs(10))
+            .set_no_tls_verify(true);
+        let (conn, mut ldap) = LdapConnAsync::with_settings(consettings, &s_url).await?;
+        ldap3::drive!(conn);
+        debug!("NTLM SSPI (current Windows session)");
+        ldap.sasl_ntlm_bind("", "")
+            .await?
+            .success()
+            .map_err(|e| format!("SSPI authentication to {} failed: {e}", domain.to_uppercase()))?;
+        info!("Connected to {} Active Directory via SSPI!", domain.to_uppercase().bold().green());
+        return Ok(ldap);
+    }
 
     // Certificate transport: StartTLS by default, LDAPS with --ldaps.
     let starttls = use_cert && !options.ldaps;
@@ -50,7 +68,7 @@ pub async fn ldap_auth(options: &Options) -> Result<ldap3::Ldap, Box<dyn Error>>
         effective_ldaps,
         options.ip.as_deref(),
         effective_port,
-        &options.domain,
+        domain,
         options.ldapfqdn.as_deref(),
         options.username.as_deref(),
         options.password.as_deref(),
@@ -77,8 +95,6 @@ pub async fn ldap_auth(options: &Options) -> Result<ldap3::Ldap, Box<dyn Error>>
 
     let (conn, mut ldap) = LdapConnAsync::with_settings(consettings, &ldap_args.s_url).await?;
     ldap3::drive!(conn);
-
-    let domain = &options.domain;
 
     if use_cert {
         // Pass-the-Certificate: SASL EXTERNAL over StartTLS, or implicit
@@ -196,7 +212,7 @@ pub(crate) async fn collect_from_ldap_into<S: Storage<LdapSearchEntry>>(
                 cn,
                 Scope::Subtree,
                 ldapfilter,
-                vec!["*", "nTSecurityDescriptor", "msDS-User-Account-Control-Computed"],
+                vec!["*", "nTSecurityDescriptor"],
             )
             .await?;
 
