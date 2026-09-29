@@ -1,12 +1,11 @@
 [package]
-authors = ["g0h4n <g0h4n_0@protonmail.com>"]
-name = "rusthound-ce"
-description = "Active Directory data collector for Bloodhound Community Edition written in rust."
-keywords = ["bloodhound", "pentest", "ldap", "tokio", "async"]
-repository = "https://github.com/g0h4n/RustHound-CE"
-homepage = "https://github.com/g0h4n/RustHound-CE"
-documentation = "https://docs.rs/rusthound-ce/"
-version = "2.5.14"
+authors = ["hypnguyen1209 <hypnguyen1209@gmail.com>"]
+name = "rustad"
+description = "Active Directory collector, analyzer and Kerberos toolkit."
+keywords = ["bloodhound", "pentest", "ldap", "kerberos", "active-directory"]
+repository = "https://github.com/hypnguyen1209/RustAD"
+homepage = "https://github.com/hypnguyen1209/RustAD"
+version = "2.0.0"
 edition = "2021"
 license = "MIT"
 readme = "README.md"
@@ -17,10 +16,11 @@ tokio = { version = "1.42.0", features = ["rt-multi-thread", "macros", "net", "s
 clap = "4.5.23"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
-nom7 = { version="7.0", package="nom" }
+nom7 = { version = "7.0", package = "nom" }
 colored = "2"
 chrono = "0.4"
 bitflags = "2.4.1"
+regex = "1"
 env_logger = "0.11"
 log = "0.4"
 lazy_static = "1.4.0"
@@ -34,31 +34,29 @@ picky-krb = "=0.11.1"
 picky = "=7.0.0-rc.17"
 winreg = { version = "0.52", optional = true }
 sha1 = "0.10"
-regex = "1"
 quick-xml = "0.37"
 once_cell = "1.19"
 bincode = "2.0.1"
 obfstr = "0.4.1"
 rayon = "1.10"
 mimalloc = "0.1"
-# HasSession and GPOChanges
-futures     = "0.3" 
-anyhow      = "1"
+futures = "0.3"
+anyhow = "1"
 smb2-client = "0.2.4"
-dcerpc      = "0.2.7"
-# es8 check
+dcerpc = "0.2.7"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
-# Kerberos SMB auth
-picky-asn1      = "0.10"
-picky-asn1-der  = "0.5"
-ms-pac-forge    = "0.1.3"
+picky-asn1 = "0.10"
+picky-asn1-der = "0.5"
+ms-pac-forge = "0.1.3"
 rand = "0.8"
-# rustls pieces (aligned with what ldap3 0.12.1 pulls: rustls 0.23, pki-types 1).
-rustls           = { version = "0.23", default-features = false, features = ["ring", "std"] }
-rustls-pemfile   = "2"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls-pemfile = "2"
 rustls-pki-types = "1"
-# PKCS#12 (.pfx) parsing, pure Rust.
 p12-keystore = "0.3"
+petgraph = "0.7"
+hmac = "0.12"
+md-5 = "0.10"
+digest = "0.10"
 
 [features]
 noargs = ["winreg"] # Only available for Windows
@@ -66,8 +64,12 @@ nogssapi = ["ldap3/tls-rustls-ring", "ldap3/ntlm"] # Used for linux_musl armv7 a
 default = ["ldap3/tls-rustls-ring", "ldap3/gssapi", "ldap3/ntlm"]
 
 [profile.release]
-opt-level = 3
+opt-level = "z"
 lto = true
-strip = true
+strip = "symbols"
 codegen-units = 1
 panic = "abort"
+overflow-checks = false
+debug = false
+debug-assertions = false
+incremental = false
